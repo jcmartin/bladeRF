@@ -710,7 +710,12 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                             /* Account for current position in buffer */
                             left_in_buffer -= s->meta.curr_msg_off;
 
-                            if (time_delta >= left_in_buffer) {
+                            uint64_t sample_delta = time_delta;
+                            
+                            if (s->stream_config.layout == BLADERF_RX_X2)
+                                sample_delta *= 2;
+
+                            if (sample_delta >= left_in_buffer) {
                                 /* Discard the remainder of this buffer */
                                 advance_rx_buffer(b);
                                 s->state = SYNC_STATE_WAIT_FOR_BUFFER;
@@ -719,10 +724,10 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                                 log_verbose("%s: Discarding rest of buffer.\n",
                                             __FUNCTION__);
 
-                            } else if (time_delta <= left_in_msg(s)) {
+                            } else if (sample_delta <= left_in_msg(s)) {
                                 /* Fast forward within the current message */
-                                assert(time_delta <= SIZE_MAX);
-                                s->meta.curr_msg_off += (size_t) time_delta;
+                                assert(sample_delta <= SIZE_MAX);
+                                s->meta.curr_msg_off += (size_t) sample_delta;
                                 s->meta.curr_timestamp += time_delta;
 
                                 log_verbose("%s: Seeking within message (t=%llu)\n",
@@ -731,7 +736,7 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                             } else {
                                 s->meta.state = SYNC_META_STATE_HEADER;
 
-                                s->meta.msg_num += timestamp_to_msg(s, time_delta);
+                                s->meta.msg_num += timestamp_to_msg(s, sample_delta);
 
                                 log_verbose("%s: Seeking to message %u.\n",
                                             __FUNCTION__, s->meta.msg_num);
