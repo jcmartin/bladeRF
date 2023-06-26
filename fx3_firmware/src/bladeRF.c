@@ -290,6 +290,38 @@ CyU3PReturnStatus_t ClearDMAChannel(uint8_t ep,
     return status;
 }
 
+CyU3PReturnStatus_t ClearDMAMultiChannel(uint8_t ep,
+                                    CyU3PDmaMultiChannel * handle,
+                                    uint32_t count)
+{
+    CyU3PReturnStatus_t status;
+
+    status = CyU3PDmaMultiChannelReset(handle);
+    if (status != CY_U3P_SUCCESS) {
+        LOG_ERROR(status);
+        return status;
+    }
+
+    status = CyU3PUsbFlushEp(ep);
+    if (status != CY_U3P_SUCCESS) {
+        LOG_ERROR(status);
+        return status;
+    }
+
+    status = CyU3PUsbResetEp(ep);
+    if (status != CY_U3P_SUCCESS) {
+        LOG_ERROR(status);
+        return status;
+    }
+
+    status = CyU3PDmaMultiChannelSetXfer (handle, count, 0);
+    if (status != CY_U3P_SUCCESS) {
+        LOG_ERROR(status);
+    }
+
+    return status;
+}
+
 CyBool_t ClearHaltCondition(uint16_t endpoint) {
     CyBool_t isHandled = CyFalse;
 

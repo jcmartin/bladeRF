@@ -612,10 +612,11 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                             exit_early = true;
                             log_debug("Sample discontinuity detected @ "
                                       "buffer %u, message %u: Expected t=%llu, "
-                                      "got t=%llu\n",
+                                      "got t=%llu (delta = %llu)\n",
                                       b->cons_i, s->meta.msg_num,
                                       (unsigned long long)s->meta.curr_timestamp,
-                                      (unsigned long long)s->meta.msg_timestamp);
+                                      (unsigned long long)s->meta.msg_timestamp,
+                                      s->meta.msg_timestamp - s->meta.curr_timestamp);
 
                         } else {
                             log_verbose("Got header for message %u: "
