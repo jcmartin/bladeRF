@@ -415,7 +415,6 @@ begin
                         -- There is an RX to perform (sending data to FX3).
                         future.ack_downcount    <= ACK_DOWNCOUNT_READ;
                         future.dma_downcount    <= gpif_buf_size-1;
-                        future.rx_current_dma   <= RX0;
                         future.state            <= SETUP_RD;
 
                     elsif (should_tx) then
@@ -617,6 +616,15 @@ begin
 
                 if (packet_enable = '1' and current.finishing_rx = '1' and current.fini_downcount = 8) then
                     future.dma_acks         <= acknowledge(current.rx_current_dma);
+                end if;
+
+                if (current.finishing_rx) then
+                    if (current.rx_current_dma = RX0) then
+                        future.rx_current_dma <= RX1;
+                    else
+                        future.rx_current_dma <= RX0;
+                    end if;
+
                 end if;
 
                 if (current.fini_downcount = 0) then
