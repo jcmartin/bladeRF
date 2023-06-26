@@ -8,7 +8,7 @@
       <I2SEnabled>False</I2SEnabled>
       <ADMuxedEnabled>False</ADMuxedEnabled>
       <InterfaceType>Master</InterfaceType>
-      <CommunicationType>Synchronous</CommunicationType>
+      <CommunicationType>Asynchronous</CommunicationType>
       <ClockSource>Internal</ClockSource>
       <ClockEdge>Positive</ClockEdge>
       <Endianness>LittleEndian</Endianness>
@@ -24,7 +24,7 @@
     </Signal>
     <Signal ElementId="INPUT1" SignalType="Input" SpecialFunction="None">
       <DisplayName>RX_1</DisplayName>
-      <GPIOPinNumber>GPIO_18</GPIOPinNumber>
+      <GPIOPinNumber>GPIO_26</GPIOPinNumber>
       <Polarity>ActiveHigh</Polarity>
     </Signal>
     <Signal ElementId="INPUT2" SignalType="Input" SpecialFunction="None">
@@ -96,6 +96,11 @@
       <Polarity>ActiveHigh</Polarity>
       <Delay>Alpha</Delay>
       <AssetionType>Toggle</AssetionType>
+    </Signal>
+    <Signal ElementId="INPUT4" SignalType="Input" SpecialFunction="DLE">
+      <DisplayName>DLE</DisplayName>
+      <GPIOPinNumber>GPIO_18</GPIOPinNumber>
+      <Polarity>ActiveHigh</Polarity>
     </Signal>
   </Signals>
   <StateMachine>
