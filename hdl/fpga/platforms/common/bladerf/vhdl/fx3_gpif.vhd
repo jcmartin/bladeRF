@@ -611,8 +611,9 @@ begin
             -- =================================================================
             when FINISHED =>
                 -- This provides a pause between adjacent transactions.
+                future.state        <= IDLE;
                 future.gpif_mode        <= IDLE;
-                future.fini_downcount   <= max(current.fini_downcount-1, 0);
+                -- future.fini_downcount   <= max(current.fini_downcount-1, 0);
 
                 if (packet_enable = '1' and current.finishing_rx = '1' and current.fini_downcount = 8) then
                     future.dma_acks         <= acknowledge(current.rx_current_dma);
@@ -627,9 +628,9 @@ begin
 
                 end if;
 
-                if (current.fini_downcount = 0) then
-                    future.state        <= IDLE;
-                end if;
+                -- if (current.fini_downcount = 0) then
+                --     future.state        <= IDLE;
+                -- end if;
 
         end case;
     end process fsm_comb_proc;

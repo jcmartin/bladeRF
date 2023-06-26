@@ -25,8 +25,8 @@ architecture arch of fx3_gpif_model is
     alias dma1_rx_ack   is ctl(1);
     alias dma2_tx_ack   is ctl(2);
     alias dma3_tx_ack   is ctl(3);
-    -- alias dma_rx_enable is ctl(4);
-    -- alias dma_tx_enable is ctl(5);
+    alias dma_rx_enable is ctl(4);
+    alias dma_tx_enable is ctl(5);
     alias dma_idle      is ctl(6);
     alias sys_reset     is ctl(7);
     alias dma0_rx_reqx  is ctl(8);
@@ -82,54 +82,7 @@ begin
         dma0_valid  <= '0';
         dma1        <= (others => 'X');
         dma1_valid  <= '0';
-
-        case (current.state) is
-            when START =>
-                future.state <= INIT;
-            when INIT =>
-                sys_reset <= '1';
-                future.state <= WAIT_0;
-            when WAIT_0 =>
-                dma_idle <= '1';
-                if (dma0_rx_ack = '1' or dma1_rx_ack = '1') then
-                    future.state <= IF_RX;
-                end if;
-            when IF_RX =>
-                if (dma0_rx_ack = '1') then
-                    future.state <= IF_RX_0;
-                elsif (dma1_rx_ack = '1') then
-                    future.state <= IF_RX_1;
-                end if;
-            when IF_RX_0 =>
-                dma0 <= gpif;
-                dma0_valid <= '1';
-                dma1 <= (others => 'X');
-                future.dma_downcount <= current.dma_downcount - 1;
-
-                if (current.dma_downcount = 0) then
-                    future.state <= DONE;
-                    future.dma0_ready <= '0';
-                    future.dma0_ready_downcount <= DMA_READY_DOWNCOUNT_RESET;
-                end if;
-            when IF_RX_1 =>
-                dma0 <= (others => 'X');
-                dma1 <= gpif;
-                dma1_valid <= '1';
-                future.dma_downcount <= current.dma_downcount - 1;
-
-                if (current.dma_downcount = 0) then
-                    future.state <= DONE;
-                    future.dma1_ready <= '0';
-                    future.dma1_ready_downcount <= DMA_READY_DOWNCOUNT_RESET;
-                end if;
-            when DONE =>
-                future.state <= WAIT_0;
-        end case;
         
-    end process;
-
-    ready_downcount : process(current) is
-    begin
         if (current.dma0_ready = '0') then
             if (current.dma0_ready_downcount = 0) then
                 future.dma0_ready <= '1';
@@ -145,14 +98,63 @@ begin
                 future.dma1_ready_downcount <= current.dma1_ready_downcount - 1;
             end if;
         end if;
-    end process ready_downcount;
-    
+
+        case (current.state) is
+            when START =>
+                future.state <= INIT;
+            when INIT =>
+                sys_reset <= '1';
+                future.state <= WAIT_0;
+            when WAIT_0 =>
+                dma_idle <= '1';
+                if (dma0_rx_ack = '1' or dma1_rx_ack = '1') then
+                    future.state <= IF_RX;
+                    future.dma_downcount <= DMA_DOWNCOUNT_RESET;
+                end if;
+            when IF_RX =>
+                if (dma0_rx_ack = '1') then
+                    future.state <= IF_RX_0;
+                elsif (dma1_rx_ack = '1') then
+                    future.state <= IF_RX_1;
+                end if;
+            when IF_RX_0 =>
+                dma0 <= gpif;
+                dma0_valid <= '1';
+                dma1 <= (others => 'X');
+
+                if (current.dma_downcount = 0) then
+                    future.state <= DONE;
+                    future.dma0_ready <= '0';
+                    future.dma0_ready_downcount <= DMA_READY_DOWNCOUNT_RESET;
+                else
+                    future.dma_downcount <= current.dma_downcount - 1;
+                end if;
+            when IF_RX_1 =>
+                dma0 <= (others => 'X');
+                dma1 <= gpif;
+                dma1_valid <= '1';
+
+                if (current.dma_downcount = 0) then
+                    future.state <= DONE;
+                    future.dma1_ready <= '0';
+                    future.dma1_ready_downcount <= DMA_READY_DOWNCOUNT_RESET;
+                else
+                    future.dma_downcount <= current.dma_downcount - 1;
+                end if;
+            when DONE =>
+                future.state <= WAIT_0;
+        end case;
+        
+    end process;
+
     fsm_output : process(current) is
     begin
-       dma0_rx_reqx <= current.dma0_ready;
-       dma1_rx_reqx <= current.dma1_ready;
-       dma2_tx_reqx <= '0';
-       dma3_tx_reqx <= '0';       
+        dma_rx_enable <= '1';
+        dma_tx_enable <= '0';
+        dma0_rx_reqx <= not current.dma0_ready;
+        dma1_rx_reqx <= not current.dma1_ready;
+        dma2_tx_reqx <= '0';
+        dma3_tx_reqx <= '0';       
     end process fsm_output;
 
     
