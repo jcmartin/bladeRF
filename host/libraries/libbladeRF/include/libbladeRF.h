@@ -2171,6 +2171,10 @@ typedef enum {
      * 
      * When using bladerf_sync_rx(), the 12 bit samples will be unpacked and 
      * byte aligned into a buffer identical to BLADERF_FORMAT_SC16_Q11
+     * 
+     * Note: bladerf_deinterleave_stream_buffer() / 
+     * bladerf_interleave_stream_buffer() should only be called with byte 
+     * aligned buffers
      */
     BLADERF_FORMAT_SC12_Q11,
 
@@ -2178,6 +2182,15 @@ typedef enum {
      * This format is the same as ::BLADERF_FORMAT_SC12_Q11 except for the 
      * addition of 16 byte metadata at the start, see 
      * ::BLADERF_FORMAT_SC16_Q11_META
+     * 
+     * Currently only RX for this mode is supported.
+     * 
+     * When using bladerf_sync_rx(), the 12 bit samples will be unpacked and 
+     * byte aligned into a buffer identical to BLADERF_FORMAT_SC16_Q11
+     * 
+     * Note: bladerf_deinterleave_stream_buffer() / 
+     * bladerf_interleave_stream_buffer() should only be called with byte 
+     * aligned buffers
      */
     BLADERF_FORMAT_SC12_Q11_META,
 

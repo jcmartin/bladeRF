@@ -48,12 +48,14 @@ static inline int requires_timestamps(bladerf_format format, bool *required)
     switch (format) {
         case BLADERF_FORMAT_SC8_Q7_META:
         case BLADERF_FORMAT_SC16_Q11_META:
+        case BLADERF_FORMAT_SC12_Q11_META:
         case BLADERF_FORMAT_PACKET_META:
             *required = true;
             break;
 
         case BLADERF_FORMAT_SC8_Q7:
         case BLADERF_FORMAT_SC16_Q11:
+        case BLADERF_FORMAT_SC12_Q11:
             *required = false;
             break;
 
@@ -121,6 +123,12 @@ int perform_format_config(struct bladerf *dev,
        gpio_val |= BLADERF_GPIO_8BIT_MODE;
     } else {
        gpio_val &= ~BLADERF_GPIO_8BIT_MODE;
+    }
+
+    if (format == BLADERF_FORMAT_SC12_Q11 || format == BLADERF_FORMAT_SC12_Q11_META) {
+        gpio_val |= BLADERF_GPIO_12BIT_MODE;
+    } else {
+        gpio_val &= ~BLADERF_GPIO_12BIT_MODE;
     }
 
     CHECK_STATUS(dev->backend->config_gpio_write(dev, gpio_val));
