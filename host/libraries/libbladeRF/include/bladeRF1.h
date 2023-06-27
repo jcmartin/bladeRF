@@ -1375,6 +1375,12 @@ int CALL_CONV bladerf_calibrate_dc(struct bladerf *dev,
  * Enable 8bit sample mode
  */
 #define BLADERF_GPIO_8BIT_MODE (1 << 20)
+ 
+ /**
+  * Enable 12bit RX sample mode
+  * TODO: Which bits are free? Or does it not matter?
+  */
+#define BLADERF_GPIO_12BIT_MODE (1 << 20)
 
 /**
  * AGC enable control bit

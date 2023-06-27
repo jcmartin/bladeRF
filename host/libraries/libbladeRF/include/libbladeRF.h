@@ -2160,6 +2160,27 @@ typedef enum {
      */
     BLADERF_FORMAT_SC16_Q11_META,
 
+    // TODO: packed / unpacked lengths + details for async interface
+
+    /**
+     * This format is the same as the ::BLADERF_FORMAT_SC16_Q11 except that the
+     * underlying data transfers happen with unaligned 12 bit samples in order
+     * to increase throughput.
+     * 
+     * Currently only RX for this mode is supported.
+     * 
+     * When using bladerf_sync_rx(), the 12 bit samples will be unpacked and 
+     * byte aligned into a buffer identical to BLADERF_FORMAT_SC16_Q11
+     */
+    BLADERF_FORMAT_SC12_Q11,
+
+    /**
+     * This format is the same as ::BLADERF_FORMAT_SC12_Q11 except for the 
+     * addition of 16 byte metadata at the start, see 
+     * ::BLADERF_FORMAT_SC16_Q11_META
+     */
+    BLADERF_FORMAT_SC12_Q11_META,
+
     /**
      * This format is for exchanging packets containing digital payloads with
      * the FPGA. A packet is generall a digital payload, that the FPGA then
