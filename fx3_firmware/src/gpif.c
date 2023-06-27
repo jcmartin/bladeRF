@@ -24,6 +24,8 @@
 #include <cyu3pib.h>
 
 #include "gpif.h"
+#include "logger.h"
+#include "../firmware_common/logger_id.h"
 
 /* These generated headers contain declarations, and must be included in
  * only one place */
@@ -31,6 +33,12 @@
 #include "cyfxgpif_RFlink.h"
 
 #define THIS_FILE LOGGER_ID_GPIF_C
+
+void PibIntrCb(CyU3PPibIntrType cbType, uint16_t cbArg) {
+    LOG_ERROR(cbType);
+    LOG_ERROR(CYU3P_GET_GPIF_ERROR_TYPE(cbArg));
+    LOG_ERROR(CYU3P_GET_PIB_ERROR_TYPE(cbArg));
+}
 
 CyU3PReturnStatus_t NuandConfigureGpif(NuandGpifConfig config)
 {
@@ -96,6 +104,8 @@ CyU3PReturnStatus_t NuandConfigureGpif(NuandGpifConfig config)
         return status;
     }
     pib_active = CyTrue;
+    CyU3PPibRegisterCallback(PibIntrCb, 
+        CYU3P_PIB_INTR_DLL_UPDATE | CYU3P_PIB_INTR_PPCONFIG | CYU3P_PIB_INTR_ERROR);
 
     /* Load the GPIF configuration */
     status = CyU3PGpifLoad(gpif_config);
