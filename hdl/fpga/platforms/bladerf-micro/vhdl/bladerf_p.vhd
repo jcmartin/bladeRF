@@ -298,6 +298,7 @@ package bladerf_p is
 
     type nios_gpo_t is record
         xb_mode         : std_logic_vector(1 downto 0);
+        twelvebit_en    : std_logic;
         eightbit_en     : std_logic;
         packet_en       : std_logic;
         si_clock_sel    : std_logic;
@@ -510,6 +511,7 @@ package body bladerf_p is
         variable rv : std_logic_vector(31 downto 0) := (others => 'U');
     begin
         rv(31 downto 30) := x.xb_mode;
+        rv(21)           := x.twelvebit_en;
         rv(20)           := x.eightbit_en;
         rv(19)           := x.packet_en;
         rv(18)           := x.si_clock_sel;
@@ -589,6 +591,7 @@ package body bladerf_p is
         variable rv : nios_gpo_t;
     begin
         rv.xb_mode         := x(31 downto 30);
+        rv.twelvebit_en    := x(21);
         rv.eightbit_en     := x(20);
         rv.packet_en       := x(19);
         rv.si_clock_sel    := x(18);

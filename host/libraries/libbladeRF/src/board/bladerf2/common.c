@@ -133,6 +133,17 @@ int perform_format_config(struct bladerf *dev,
 
     CHECK_STATUS(dev->backend->config_gpio_write(dev, gpio_val));
 
+    // TODO: TEMP
+    uint32_t gpio_val_set;
+    CHECK_STATUS(dev->backend->config_gpio_read(dev, &gpio_val_set));
+    if (gpio_val != gpio_val_set) {
+        log_error(
+            "NIOS GPIO config values not set, expected 0x%x but got 0x%x\n",
+            gpio_val, gpio_val_set);
+    } else {
+        log_debug("NIOS GPIO config values set to 0x%x\n", gpio_val);
+    }
+
     board_data->module_format[dir] = format;
 
     return 0;
