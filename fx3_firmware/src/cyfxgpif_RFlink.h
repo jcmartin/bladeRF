@@ -13,41 +13,41 @@
  * 
  */
 
-#ifndef _INCLUDED_RFLINK_CYDSN_
-#define _INCLUDED_RFLINK_CYDSN_
+#ifndef _INCLUDED_CYFXGPIF2CONFIG_RF_
+#define _INCLUDED_CYFXGPIF2CONFIG_RF_
 #include "cyu3types.h"
 #include "cyu3gpif.h"
 
 /* Summary
    Number of states in the state machine
  */
-#define CY_NUMBER_OF_STATES 10
+#define CY_RFLINK_NUMBER_OF_STATES 10
 
 /* Summary
    Mapping of user defined state names to state indices
  */
-#define START 0
-#define INIT 1
-#define IF_RX_0 3
-#define IF_RX_1 5
-#define IF_TX_2 6
-#define DONE 4
-#define WAIT_0 2
-#define IF_TX_3 9
-#define IF_TX 7
-#define IF_RX 8
+#define RFLINK_START 0
+#define RFLINK_INIT 1
+#define RFLINK_IF_RX_0 3
+#define RFLINK_IF_RX_1 5
+#define RFLINK_IF_TX_2 6
+#define RFLINK_DONE 4
+#define RFLINK_WAIT_0 2
+#define RFLINK_IF_TX_3 9
+#define RFLINK_IF_TX 7
+#define RFLINK_IF_RX 8
 
 
 /* Summary
    Initial value of early outputs from the state machine.
  */
-#define ALPHA_START 0x80
+#define RFLINK_ALPHA_START 0x80
 
 
 /* Summary
    Transition function values used in the state machine.
  */
-uint16_t CyFxGpifTransition[]  = {
+uint16_t Rflink_CyFxGpifTransition[]  = {
     0x0000, 0xAAAA, 0x5555, 0xCCCC, 0xFFFF, 0xEEEE, 0xFFF0
 };
 
@@ -57,7 +57,7 @@ uint16_t CyFxGpifTransition[]  = {
    This array consists of non-replicated waveform descriptors and acts as a 
    waveform table. 
  */
-CyU3PGpifWaveData CyFxGpifWavedata[]  = {
+CyU3PGpifWaveData Rflink_CyFxGpifWavedata[]  = {
     {{0x4E739C01,0x00001000,0x80000000},{0x00000000,0x00000000,0x00000000}},
     {{0x54806202,0x0000000C,0x80000000},{0x00000000,0x00000000,0x00000000}},
     {{0x1E706207,0x0C00C0C6,0x80000000},{0x1E712008,0x00010106,0x80000000}},
@@ -69,14 +69,14 @@ CyU3PGpifWaveData CyFxGpifWavedata[]  = {
 /* Summary
    Table that maps state indices to the descriptor table indices.
  */
-uint8_t CyFxGpifWavedataPosition[]  = {
+uint8_t Rflink_CyFxGpifWavedataPosition[]  = {
     0,1,2,3,1,3,3,4,5,3
 };
 
 /* Summary
    GPIF II configuration register values.
  */
-uint32_t CyFxGpifRegValue[]  = {
+uint32_t Rflink_CyFxGpifRegValue[]  = {
     0x80008250,  /*  CY_U3P_PIB_GPIF_CONFIG */
     0x0000086C,  /*  CY_U3P_PIB_GPIF_BUS_CONFIG */
     0x00000000,  /*  CY_U3P_PIB_GPIF_BUS_CONFIG2 */
@@ -158,14 +158,14 @@ uint32_t CyFxGpifRegValue[]  = {
 /* Summary
    This structure holds all the configuration inputs for the GPIF II. 
  */
-const CyU3PGpifConfig_t CyFxGpifConfig  = {
-    (uint16_t)(sizeof(CyFxGpifWavedataPosition)/sizeof(uint8_t)),
-    CyFxGpifWavedata,
-    CyFxGpifWavedataPosition,
-    (uint16_t)(sizeof(CyFxGpifTransition)/sizeof(uint16_t)),
-    CyFxGpifTransition,
-    (uint16_t)(sizeof(CyFxGpifRegValue)/sizeof(uint32_t)),
-    CyFxGpifRegValue
+const CyU3PGpifConfig_t Rflink_CyFxGpifConfig  = {
+    (uint16_t)(sizeof(Rflink_CyFxGpifWavedataPosition)/sizeof(uint8_t)),
+    Rflink_CyFxGpifWavedata,
+    Rflink_CyFxGpifWavedataPosition,
+    (uint16_t)(sizeof(Rflink_CyFxGpifTransition)/sizeof(uint16_t)),
+    Rflink_CyFxGpifTransition,
+    (uint16_t)(sizeof(Rflink_CyFxGpifRegValue)/sizeof(uint32_t)),
+    Rflink_CyFxGpifRegValue
 };
 
 #endif   /* _INCLUDED_RFLINK_CYDSN_ */

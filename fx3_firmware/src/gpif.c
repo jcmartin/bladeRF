@@ -67,12 +67,15 @@ CyU3PReturnStatus_t NuandConfigureGpif(NuandGpifConfig config)
             gpif_config = &Rflink_CyFxGpifConfig;
             gpif_state_index = RFLINK_START;
             gpif_initial_alpha = RFLINK_ALPHA_START;
+            // Async interface
+            pibClock.isDllEnable = CyTrue;
             break;
 
         case GPIF_CONFIG_FPGA_LOAD:
             gpif_config = &C4loader_CyFxGpifConfig;
             gpif_state_index = C4LOADER_START;
             gpif_initial_alpha = C4LOADER_ALPHA_START;
+            pibClock.isDllEnable = CyFalse;
             break;
 
         case GPIF_CONFIG_DISABLED:
@@ -84,10 +87,9 @@ CyU3PReturnStatus_t NuandConfigureGpif(NuandGpifConfig config)
     }
 
 
-    pibClock.clkDiv = 4;
+    pibClock.clkDiv = 2;
     pibClock.clkSrc = CY_U3P_SYS_CLK;
     pibClock.isHalfDiv = CyFalse;
-    pibClock.isDllEnable = CyFalse;
 
     status = CyU3PPibInit(CyTrue, &pibClock);
     if (status != CY_U3P_SUCCESS) {
