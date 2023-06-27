@@ -39,6 +39,7 @@ architecture hosted_bladerf of bladerf is
     signal sys_reset           : std_logic;
 
     signal sys_clock           : std_logic;
+    signal fx3_clock           : std_logic;
     signal sys_pll_locked      : std_logic;
     signal sys_pll_reset       : std_logic;
 
@@ -203,6 +204,7 @@ begin
             refclk   => c5_clock2,
             rst      => sys_pll_reset,
             outclk_0 => sys_clock,
+            outclk_1 => fx3_clock,
             locked   => sys_pll_locked
         );
 
@@ -221,7 +223,7 @@ begin
     -- retime the FX3 GPIF interface for timing closure.
     U_fx3_pll : component fx3_pll
         port map (
-            refclk   =>  fx3_pclk,
+            refclk   =>  fx3_clock,
             rst      =>  fx3_pclk_pll_reset,
             outclk_0 =>  fx3_pclk_pll,
             locked   =>  fx3_pclk_pll_locked
@@ -267,6 +269,7 @@ begin
     U_fx3_gpif : entity work.fx3_gpif
         port map (
             pclk                =>  fx3_pclk_pll,
+            fx3_clk             =>  fx3_clock,
             reset               =>  sys_reset_pclk,
 
             usb_speed           =>  usb_speed_pclk,

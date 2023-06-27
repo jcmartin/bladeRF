@@ -34,9 +34,12 @@ ip-generate \
     --component-param=gui_operation_mode="normal" \
     --component-param=gui_pll_auto_reset="On" \
     --component-param=gui_use_locked="True" \
-    --component-param=gui_number_of_clocks="1" \
+    --component-param=gui_number_of_clocks="2" \
     --component-param=gui_reference_clock_frequency="38.4 MHz" \
     --component-param=gui_output_clock_frequency0="80.0 MHz" \
     --component-param=gui_phase_shift0="0.0 ps" \
     --component-param=gui_duty_cycle0="50%" \
+    --component-param=gui_output_clock_frequency1="100.0 MHz" \
+    --component-param=gui_phase_shift1="0.0 ps" \
+    --component-param=gui_duty_cycle1="50%" \
 

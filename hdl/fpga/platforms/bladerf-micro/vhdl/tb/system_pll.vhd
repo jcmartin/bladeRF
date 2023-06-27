@@ -26,25 +26,32 @@ entity system_pll is
         refclk   : in  std_logic;
         rst      : in  std_logic;
         outclk_0 : out std_logic;
+        outclk_1 : out std_logic;
         locked   : out std_logic
     );
 end entity ; -- system_pll
 
 architecture simulation of system_pll is
     constant SYSTEM_PLL_HALF_PERIOD : time      := 1 sec * (1.0/80.0e6/2.0) ;
-    signal outclk                   : std_logic := '1' ;
+    constant FX3_CLOCK_HALF_PERIOD  : time      := 1 sec * (1.0/100.0e6/2.0);
+    signal outclk_0_int             : std_logic := '1' ;
+    signal outclk_1_int             : std_logic := '1' ;
 begin
     -- Generate 80 MHz clock
-    outclk <= not outclk after SYSTEM_PLL_HALF_PERIOD;
+    outclk_0_int <= not outclk_0_int after SYSTEM_PLL_HALF_PERIOD;
+    -- Generate 100 MHz clock
+    outclk_1_int <= not outclk_1_int after FX3_CLOCK_HALF_PERIOD;
 
     -- Send it out...
-    simulate_pll : process(rst, outclk) is
+    simulate_pll : process(rst, outclk_0_int, outclk_1_int) is
     begin
         if (rst = '1') then
             outclk_0    <= '0';
+            outclk_1    <= '0';
             locked      <= '0';
         else
-            outclk_0    <= outclk;
+            outclk_0    <= outclk_0_int;
+            outclk_1    <= outclk_1_int;
             locked      <= '1';
         end if;
     end process ;

@@ -37,6 +37,7 @@ package bladerf_p is
             refclk   : in  std_logic;
             rst      : in  std_logic;
             outclk_0 : out std_logic;
+            outclk_1 : out std_logic;
             locked   : out std_logic
         );
     end component;

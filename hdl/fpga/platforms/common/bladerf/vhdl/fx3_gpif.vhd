@@ -26,6 +26,7 @@ entity fx3_gpif is
   port (
     -- FX3 control signals
     pclk                :   in  std_logic;
+    fx3_clk             :   in  std_logic;
     reset               :   in  std_logic;
 
     -- USB Speed 0 = SS, 1 = HS
@@ -95,11 +96,12 @@ architecture sample_shuffler of fx3_gpif is
                             TX, TX_META, TX_IGNORE);
     type dma_channel_t  is (RX0, RX1, TX2, TX3);
 
-    -- Control mapping
+    -- Control mapping (0 <> GPIO_17)
     alias dma0_rx_ack   is ctl_out(0);
-    alias dma1_rx_ack   is ctl_out(1);
+    alias dma1_rx_ack   is ctl_out(9);
     alias dma2_tx_ack   is ctl_out(2);
     alias dma3_tx_ack   is ctl_out(3);
+    alias d_latch       is ctl_out(1);
     alias dma_rx_enable is ctl_in(4);
     alias dma_tx_enable is ctl_in(5);
     alias dma_idle      is ctl_in(6);
@@ -109,7 +111,7 @@ architecture sample_shuffler of fx3_gpif is
     alias dma3_tx_reqx  is ctl_in(11);
 
     -- Control OE (12 downto 0)
-    constant CONTROL_OE : std_logic_vector := "0000000001111";
+    constant CONTROL_OE : std_logic_vector := "0001000001111";
 
     -- State machine downcounter values
     constant ACK_DOWNCOUNT_READ     :   natural := 2;
@@ -218,6 +220,9 @@ architecture sample_shuffler of fx3_gpif is
     end function;
 
 begin
+
+    d_latch <= fx3_clk;
+
     -- DMA handshake signals (active-low, so inverting for clarity)
     dma_req.rx0 <= not dma0_rx_reqx;
     dma_req.rx1 <= not dma1_rx_reqx;
@@ -226,7 +231,8 @@ begin
 
     -- Set FX3 control OEs and default the unused outputs
     ctl_oe                  <= CONTROL_OE;
-    ctl_out(12 downto 4)    <= (others => '0');
+    ctl_out(12 downto 10)   <= (others => '0');
+    ctl_out(8 downto 4)     <= (others => '0');
 
     -- Set/clear flipflop for underrun indication
     U_underrun_ff : entity work.set_clear_ff
