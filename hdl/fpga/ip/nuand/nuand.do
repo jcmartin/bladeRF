@@ -53,6 +53,7 @@ proc compile_nuand { root platform } {
     vcom -work nuand -2008 [file join $root ./synthesis/fifo_reader.vhd]
     vcom -work nuand -2008 [file join $root ./synthesis/fifo_writer.vhd]
     vcom -work nuand -2008 [file join $root ./synthesis/tb/fifo_writer_tb.vhd]
+    vcom -work nuand -2008 [file join $root ./synthesis/twelve_bit_packer.vhd]
 
     vcom -work nuand -2008 [file join $root ./trigger/trigger.vhd]
     vcom -work nuand -2008 [file join $root ./synthesis/signal_generator.vhd]

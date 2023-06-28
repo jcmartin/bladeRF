@@ -68,7 +68,7 @@ architecture hosted_bladerf of bladerf is
     -- Inputs to GPIF controller
     signal rx_sample_fifo_rreq    : std_logic;
     signal rx_sample_fifo_rdata   : std_logic_vector(31 downto 0);
-    signal rx_sample_fifo_rused   : std_logic_vector;
+    signal rx_sample_fifo_rused   : std_logic_vector(rx_sample_fifo.rused'high+1 downto 0);
 
     signal tx_loopback_fifo       : loopback_fifo_t := LOOPBACK_FIFO_T_DEFAULT;
 

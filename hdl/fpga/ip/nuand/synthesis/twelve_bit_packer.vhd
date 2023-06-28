@@ -34,11 +34,11 @@ architecture arch of twelve_bit_packer is
     -- Output data only needs to be valid one cycle after req is asserted
     -- however we may need to save current fifo output
     type fsm_t is record
-        state                   : state_t;
-        latch                   : std_logic;
-        prev_data               : std_logic_vector(31 downto 0);
+        state               : state_t;
+        latch               : std_logic;
+        prev_data           : std_logic_vector(31 downto 0);
         -- Previous values
-        i0_p, q0_p, i1_p, q1_p  : std_logic_vector(11 downto 0);
+        q0_p, i1_p, q1_p    : std_logic_vector(11 downto 0);
     end record;
 
     constant FSM_RESET_VALUE : fsm_t := (
@@ -52,10 +52,10 @@ architecture arch of twelve_bit_packer is
 
     signal current, future : fsm_t := FSM_RESET_VALUE;
 
-    alias i0 is sample_data_in(11 downto 0);
-    alias q0 is sample_data_in(27 downto 16);
-    alias i1 is sample_data_in(43 downto 32);
-    alias q1 is sample_data_in(59 downto 48);
+    alias i0 : std_logic_vector(11 downto 0) is sample_data_in(11 downto 0);
+    alias q0 : std_logic_vector(11 downto 0) is sample_data_in(27 downto 16);
+    alias i1 : std_logic_vector(11 downto 0) is sample_data_in(43 downto 32);
+    alias q1 : std_logic_vector(11 downto 0) is sample_data_in(59 downto 48);
 
 begin
 
@@ -90,7 +90,7 @@ begin
                 sample_data_out <= sample_data_in(31 downto 0);
 
                 if (current.latch = '0') then
-                    future.prev_data <= sample_data_in(63 downto 0);
+                    future.prev_data <= sample_data_in(63 downto 32);
                 end if;
 
                 if (sample_rreq_in = '1') then
