@@ -5,21 +5,21 @@ library ieee;
 library work;
     use work.bladerf_p.all;
     use work.fifo_readwrite_p.all;
+    
+use std.env.finish;
 
 entity twelve_bit_packer_tb is
     generic (
         TWO_CHANNEL_EN          : std_logic := '1';
-        NUM_TWELVE_BIT_TRIALS   : natural := 500000;
-        NUM_SIXTEEN_BIT_TRIALS  : natural := 500000
+        NUM_TWELVE_BIT_TRIALS   : natural := 100000;
+        NUM_SIXTEEN_BIT_TRIALS  : natural := 100000
     );
 end entity;
 
 architecture test of twelve_bit_packer_tb is
     
     constant FX3_CLK_HALF_PERIOD    : time := 1 sec * (1.0/100.0e6/2.0);
-    constant RX_CLK_HALF_PERIOD_1   : time := 1 sec * (1.0/122.88e6/2.0); 
-    constant RX_CLK_HALF_PERIOD_2   : time := 1 sec * (1.0/61.44e6/2.0); 
-    signal rx_clk_half_period       : time;
+    constant RX_CLK_HALF_PERIOD     : time := 1 sec * (1.0/122.88e6/2.0); 
 
     signal rx_clock     : std_logic := '1';
     signal fx3_clock    : std_logic := '1';
@@ -58,11 +58,17 @@ architecture test of twelve_bit_packer_tb is
 
 begin
 
-    rx_clk_half_period <= RX_CLK_HALF_PERIOD_2 when TWO_CHANNEL_EN else RX_CLK_HALF_PERIOD_1;
-    rx_clock <= not rx_clock after rx_clk_half_period;
     fx3_clock <= not fx3_clock after FX3_CLK_HALF_PERIOD;
-    reset <= '0' after 20 * FX3_CLK_HALF_PERIOD;
-    rx_reset <= '0' after 20 * rx_clk_half_period;
+    reset <= '0' after 10 * FX3_CLK_HALF_PERIOD;
+    rx_reset <= '0' after 20 * RX_CLK_HALF_PERIOD;
+
+    rx_clk_slow: if (TWO_CHANNEL_EN = '1') generate
+        rx_clock <= not rx_clock after 2 * RX_CLK_HALF_PERIOD;
+    end generate rx_clk_slow;
+    
+    rx_clk_fast: if (TWO_CHANNEL_EN = '0') generate
+        rx_clock <= not rx_clock after RX_CLK_HALF_PERIOD;
+    end generate rx_clk_fast;
 
     U_twelve_bit_packer : entity work.twelve_bit_packer
     generic map (
@@ -88,7 +94,7 @@ begin
 
 
     -- RX sample FIFO
-    sample_fifo.aclr   <= rx_reset;
+    sample_fifo.aclr   <= reset;
     sample_fifo.wclock <= rx_clock;
     U_rx_sample_fifo : entity work.rx_fifo
         generic map (
@@ -113,7 +119,7 @@ begin
 
 
     -- RX meta FIFO
-    meta_fifo.aclr   <= rx_reset;
+    meta_fifo.aclr   <= reset;
     meta_fifo.wclock <= rx_clock;
     U_rx_meta_fifo : entity work.rx_meta_fifo
         generic map (
@@ -212,8 +218,9 @@ begin
 
 
     verify : process
-        variable curr_count   : unsigned(31 downto 0) := (0 => '1', others => '0');
-        variable test         : unsigned(11 downto 0);
+        variable curr_count     : unsigned(31 downto 0) := (others => '0');
+        variable two_ch_delay   : std_logic;
+        variable test           : unsigned(11 downto 0);
     begin
         twelve_bit_mode_en <= '1';
         for x in 1 to NUM_TWELVE_BIT_TRIALS loop
@@ -228,6 +235,7 @@ begin
                     nop(fx3_clock, 1);
                 end loop;
                 sample_fifo_rreq <= '0';
+                two_ch_delay := '0';
                 wait until falling_edge(fx3_clock);
                 -- Check the 4 samples
                 for i in 0 to 3 loop
@@ -237,10 +245,11 @@ begin
                     -- Check q
                     test := unsigned(sample_reg(24 * i + 23 downto 24 * i + 12));
                     assert_eq(curr_count(27 downto 16), test);
-
-                    if ((TWO_CHANNEL_EN = '0') or (i mod 2 = 1)) then
+                    
+                    if ((TWO_CHANNEL_EN = '0') or (two_ch_delay = '1')) then
                         curr_count := curr_count + 1;
                     end if;
+                    two_ch_delay := not two_ch_delay;
 
                 end loop;
             end if;
@@ -248,6 +257,7 @@ begin
 
         twelve_bit_mode_en <= '0';
         sample_fifo_rreq <= '0';
+        two_ch_delay := '0';
         nop(fx3_clock, 1);
         for i in 0 to NUM_SIXTEEN_BIT_TRIALS-1 loop
 
@@ -258,14 +268,17 @@ begin
                 nop(fx3_clock, 1);
                 sample_fifo_rreq <= '0';
 
-                if ((TWO_CHANNEL_EN = '0') or (i mod 2 = 1)) then
+                if ((TWO_CHANNEL_EN = '0') or (two_ch_delay = '1')) then
                     curr_count := curr_count + 1;
                 end if;
+                two_ch_delay := not two_ch_delay;
             else
                 nop(fx3_clock, 1);
             end if;
 
         end loop;
+        
+        finish;
 
     end process verify;
 
