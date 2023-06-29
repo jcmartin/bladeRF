@@ -8,7 +8,9 @@ library work;
 
 entity twelve_bit_packer_tb is
     generic (
-        TWO_CHANNEL_EN : std_logic := '1'
+        TWO_CHANNEL_EN          : std_logic := '1';
+        NUM_TWELVE_BIT_TRIALS   : natural := 500000;
+        NUM_SIXTEEN_BIT_TRIALS  : natural := 500000
     );
 end entity;
 
@@ -27,6 +29,8 @@ architecture test of twelve_bit_packer_tb is
     signal sample_fifo  : rx_fifo_t           := RX_FIFO_T_DEFAULT;
     signal meta_fifo    : meta_fifo_rx_t      := META_FIFO_RX_T_DEFAULT;
 
+    signal twelve_bit_mode_en : std_logic := '1';
+    
     signal sample_fifo_rreq     : std_logic := '0';
     signal sample_fifo_rdata    : std_logic_vector(31 downto 0);
     signal sample_fifo_rused    : std_logic_vector(sample_fifo.rused'high+1 downto 0);
@@ -68,7 +72,7 @@ begin
         clock               =>  fx3_clock,
         reset               =>  reset,
 
-        twelve_bit_mode_en  => '1',
+        twelve_bit_mode_en  => twelve_bit_mode_en,
         usb_speed           => '0',
 
         -- Sample FIFO
@@ -211,33 +215,57 @@ begin
         variable curr_count   : unsigned(31 downto 0) := (0 => '1', others => '0');
         variable test         : unsigned(11 downto 0);
     begin
+        twelve_bit_mode_en <= '1';
+        for x in 1 to NUM_TWELVE_BIT_TRIALS loop
+            sample_fifo_rreq <= '0';
+            nop(fx3_clock, 1);
+
+            if (unsigned(sample_fifo_rused) >= 3) then
+                -- Grab 4, 12-bit IQ samples
+                for i in 1 to 3 loop
+                    sample_reg <= sample_fifo_rdata & sample_reg(sample_reg'high downto 32);
+                    sample_fifo_rreq <= '1';
+                    nop(fx3_clock, 1);
+                end loop;
+                sample_fifo_rreq <= '0';
+                wait until falling_edge(fx3_clock);
+                -- Check the 4 samples
+                for i in 0 to 3 loop
+                    -- Check i
+                    test := unsigned(sample_reg(24 * i + 11 downto 24 * i));
+                    assert_eq(curr_count(11 downto 0), test);
+                    -- Check q
+                    test := unsigned(sample_reg(24 * i + 23 downto 24 * i + 12));
+                    assert_eq(curr_count(27 downto 16), test);
+
+                    if ((TWO_CHANNEL_EN = '0') or (i mod 2 = 1)) then
+                        curr_count := curr_count + 1;
+                    end if;
+
+                end loop;
+            end if;
+        end loop;
+
+        twelve_bit_mode_en <= '0';
         sample_fifo_rreq <= '0';
         nop(fx3_clock, 1);
+        for i in 0 to NUM_SIXTEEN_BIT_TRIALS-1 loop
 
-        if (unsigned(sample_fifo_rused) >= 3) then
-            -- Grab 4, 12-bit IQ samples
-            for i in 1 to 3 loop
-                sample_reg <= sample_fifo_rdata & sample_reg(sample_reg'high downto 32);
+            if (unsigned(sample_fifo_rused) > 0) then
+                -- Check current fifo output
+                assert_eq(curr_count, unsigned(sample_fifo_rdata));
                 sample_fifo_rreq <= '1';
                 nop(fx3_clock, 1);
-            end loop;
-            sample_fifo_rreq <= '0';
-            wait until falling_edge(fx3_clock);
-            -- Check the 4 samples
-            for i in 0 to 3 loop
-                -- Check i
-                test := unsigned(sample_reg(24 * i + 11 downto 24 * i));
-                assert_eq(curr_count(11 downto 0), test);
-                -- Check q
-                test := unsigned(sample_reg(24 * i + 23 downto 24 * i + 12));
-                assert_eq(curr_count(27 downto 16), test);
+                sample_fifo_rreq <= '0';
 
                 if ((TWO_CHANNEL_EN = '0') or (i mod 2 = 1)) then
                     curr_count := curr_count + 1;
                 end if;
+            else
+                nop(fx3_clock, 1);
+            end if;
 
-            end loop;
-        end if;
+        end loop;
 
     end process verify;
 
