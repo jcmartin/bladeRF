@@ -198,7 +198,6 @@ begin
             );
         elsif (rising_edge(rx_clock)) then
             for i in controls'range loop
-
                 if( controls(i).enable = '1') then
                     if( streams(i).data_v = '1' ) then
                         streams(i).data_i <= signed(std_logic_vector(count(15 downto 0)));
@@ -210,6 +209,7 @@ begin
                     controls(i).data_req <= not controls(i).data_req;
                 end if;
             end loop;
+        elsif (falling_edge(rx_clock)) then
             if (streams(0).data_v or streams(1).data_v) then
                 count := count + 1;
             end if;
