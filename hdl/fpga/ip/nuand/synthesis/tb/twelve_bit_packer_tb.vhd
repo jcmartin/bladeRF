@@ -27,10 +27,11 @@ architecture test of twelve_bit_packer_tb is
     signal sample_fifo  : rx_fifo_t           := RX_FIFO_T_DEFAULT;
     signal meta_fifo    : meta_fifo_rx_t      := META_FIFO_RX_T_DEFAULT;
 
-    signal sample_fifo_rreq     : std_logic;
+    signal sample_fifo_rreq     : std_logic := '0';
     signal sample_fifo_rdata    : std_logic_vector(31 downto 0);
     signal sample_fifo_rused    : std_logic_vector(sample_fifo.rused'high+1 downto 0);
-    signal packet_control       :   packet_control_t := PACKET_CONTROL_DEFAULT;
+    signal sample_reg           : std_logic_vector(95 downto 0);
+    signal packet_control       : packet_control_t := PACKET_CONTROL_DEFAULT;
 
     signal timestamp    : unsigned(63 downto 0)     := (others => '0');
     signal streams      : sample_streams_t(0 to 1)  := (others => ZERO_SAMPLE);
@@ -39,10 +40,17 @@ architecture test of twelve_bit_packer_tb is
     procedure nop( signal clock : in std_logic; count : in natural) is 
     begin
         for i in 1 to count loop
-            wait until rising_edge(clock);
+            wait until falling_edge(clock);
         end loop;
     end procedure;
-    
+   
+    procedure assert_eq(expected : unsigned; actual : unsigned) is
+    begin
+        assert(actual = expected)
+            report "Unexpected sample, expected: " & integer'image(to_integer(expected)) &
+                   " got: " & integer'image(to_integer(actual))
+            severity failure;
+    end procedure;
 
 begin
 
@@ -198,5 +206,39 @@ begin
         end if;
     end process gen_streams;
 
+
+    verify : process
+        variable curr_count   : unsigned(31 downto 0) := (0 => '1', others => '0');
+        variable test         : unsigned(11 downto 0);
+    begin
+        sample_fifo_rreq <= '0';
+        nop(fx3_clock, 1);
+
+        if (unsigned(sample_fifo_rused) >= 3) then
+            -- Grab 4, 12-bit IQ samples
+            for i in 1 to 3 loop
+                sample_reg <= sample_fifo_rdata & sample_reg(sample_reg'high downto 32);
+                sample_fifo_rreq <= '1';
+                nop(fx3_clock, 1);
+            end loop;
+            sample_fifo_rreq <= '0';
+            wait until falling_edge(fx3_clock);
+            -- Check the 4 samples
+            for i in 0 to 3 loop
+                -- Check i
+                test := unsigned(sample_reg(24 * i + 11 downto 24 * i));
+                assert_eq(curr_count(11 downto 0), test);
+                -- Check q
+                test := unsigned(sample_reg(24 * i + 23 downto 24 * i + 12));
+                assert_eq(curr_count(27 downto 16), test);
+
+                if ((TWO_CHANNEL_EN = '0') or (i mod 2 = 1)) then
+                    curr_count := curr_count + 1;
+                end if;
+
+            end loop;
+        end if;
+
+    end process verify;
 
 end test ; -- test
