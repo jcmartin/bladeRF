@@ -2,7 +2,7 @@ onerror {resume}
 quietly WaveActivateNextPane {} 0
 add wave -noupdate /twelve_bit_packer_tb/sample_reg
 add wave -noupdate /twelve_bit_packer_tb/U_twelve_bit_packer/clock
-add wave -noupdate /twelve_bit_packer_tb/U_twelve_bit_packer/current.state
+add wave -noupdate /twelve_bit_packer_tb/U_twelve_bit_packer/current
 add wave -noupdate /twelve_bit_packer_tb/U_twelve_bit_packer/i0
 add wave -noupdate /twelve_bit_packer_tb/U_twelve_bit_packer/q0
 add wave -noupdate /twelve_bit_packer_tb/U_twelve_bit_packer/i1
