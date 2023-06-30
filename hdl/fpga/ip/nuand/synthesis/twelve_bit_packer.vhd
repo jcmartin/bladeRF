@@ -31,6 +31,7 @@ entity twelve_bit_packer is
         sample_rused_out    : out std_logic_vector(FIFO_USEDR_WIDTH downto 0);
 
         meta_rreq_in        : in std_logic;
+        -- TODO: impl rusedw if ever needed by GPIF controller
         meta_empty_out      : out std_logic;
         meta_data_out       : out std_logic_vector(31 downto 0)
 
@@ -40,10 +41,12 @@ end entity;
 architecture arch of twelve_bit_packer is
 
     -- GPIF buf sizes GCD of 3 x 64 bit data to fit packed 12-bit samples
+    -- in terms of 32-bit dwords
     constant GPIF_BUF_SIZE_HS       :   natural := 255; -- One cycle of padding
     constant GPIF_BUF_SIZE_SS       :   natural := 510; -- Two cycles of padding
     
     type state_t is (START, PASS_0, PASS_1, PACK_0, PACK_1, PACK_2, PAD);
+    type meta_state_t is (IDLE, READ, WRITE);
 
     -- FIFOs are in "Show-Ahead" mode, meaning rreq acts like an acknowledge
     type fsm_t is record
@@ -54,6 +57,18 @@ architecture arch of twelve_bit_packer is
         prev_data           : std_logic_vector(31 downto 0);
         -- Previous values
         q0_p, i1_p, q1_p    : std_logic_vector(11 downto 0);
+    end record;
+
+    type meta_fsm_t is record
+        state               : meta_state_t;
+        timestamp           : unsigned(63 downto 0);
+        offset              : integer range 0 to 504;
+        offset_delta        : integer range 0 to 168;
+        skip_downcount      : integer range 0 to 4;
+        write_downcount     : integer range 0 to 3;
+        meta_data           : std_logic_vector(127 downto 0);
+        prev_meta_data      : std_logic_vector(127 downto 0);
+    
     end record;
 
     constant FSM_RESET_VALUE : fsm_t := (
@@ -67,10 +82,24 @@ architecture arch of twelve_bit_packer is
         q1_p                => (others => '0')
     );
 
+    constant META_FSM_RESET_VALUE : meta_fsm_t := (
+        state               => IDLE,
+        timestamp           => (others => '0'),
+        offset              => 0,
+        offset_delta        => 0,
+        skip_downcount      => 0,
+        write_downcount     => 0,
+        meta_data           => (others => '0'),
+        prev_meta_data      => (others => '0')
+    );
+
     signal current, future : fsm_t := FSM_RESET_VALUE;
     signal i0, q0, i1, q1  : std_logic_vector(11 downto 0);
     signal gpif_buf_size   : natural range GPIF_BUF_SIZE_HS to GPIF_BUF_SIZE_SS := GPIF_BUF_SIZE_SS;
     signal padding_size    : natural range 1 to 2;
+
+    signal meta_current, meta_future : meta_fsm_t := META_FSM_RESET_VALUE;
+    signal timestamp_in    : unsigned(63 downto 0);
 
 begin
 
@@ -78,13 +107,16 @@ begin
     q0 <= sample_data_in(27 downto 16);
     i1 <= sample_data_in(43 downto 32);
     q1 <= sample_data_in(59 downto 48);
+    timestamp_in <= unsigned(meta_data_in(95 downto 32));
 
     fsm_sync : process (clock, reset)
     begin
         if (reset = '1') then
             current <= FSM_RESET_VALUE;
+            meta_current <= META_FSM_RESET_VALUE;
         elsif (rising_edge(clock)) then
             current <= future;
+            meta_current <= meta_future;
         end if;
     end process;
 
@@ -187,6 +219,74 @@ begin
                 end if;
             
         end case;
+    end process;
+
+    -- TODO: generalize to SS 2 ch and HS 1 + 2 ch
+    -- TODO: be able to reset / change modes
+    meta_fsm_comb : process(all)
+    begin
+        meta_future <= meta_current;
+        meta_empty_out <= '1';
+        meta_rreq_out <= '0';
+
+        case (meta_current.state) is
+            when IDLE =>
+                if (meta_empty_in = '1') then
+                    meta_future.prev_meta_data <= meta_data_in;
+                    meta_future.timestamp <= timestamp_in;
+                    meta_rreq_out <= '1';
+                    meta_future.state <= READ;
+                    meta_future.offset <= 0;
+                    meta_future.offset_delta <= 0;
+                    meta_future.skip_downcount <= 4;
+                end if;
+
+            when READ =>
+                if (meta_empty_in = '1') then
+                    if (timestamp_in - meta_current.timestamp /= 508) then
+                        -- discontinuity
+                        
+                    end if;
+                    
+                    meta_future.meta_data <= 
+                        meta_current.prev_meta_data(127 downto 96) &
+                        std_logic_vector(meta_current.timestamp + meta_current.offset) & x"12344321";
+
+                    meta_future.prev_meta_data <= meta_data_in;
+
+                    if (meta_current.skip_downcount = 0) then
+                        meta_future.state <= READ;
+                        meta_future.skip_downcount <= 4;
+                        meta_future.offset <= 168 - meta_current.offset_delta;
+                        if (meta_current.offset_delta = 168) then
+                            meta_future.offset_delta <= 0; -- TODO: reset here?
+                        else
+                            meta_future.offset_delta <= meta_current.offset_delta + 2;
+                        end if;
+                    else 
+                        meta_future.state <= WRITE;
+                        meta_future.write_downcount <= 3;
+                        meta_future.skip_downcount <= meta_future.skip_downcount - 1;
+                        meta_future.offset <= meta_future.offset + 168;
+                    end if;
+
+                end if;
+
+            when WRITE =>
+                meta_empty_out <= '0';
+                meta_data_out <= meta_current.meta_data(31 downto 0);
+
+                if (meta_rreq_in = '1') then 
+                    if (meta_current.write_downcount = 0) then
+                        meta_future.state <= READ;
+                    else
+                        meta_future.meta_data <= x"00000000" & meta_current.meta_data(127 downto 32);
+                        meta_future.write_downcount <= meta_future.write_downcount - 1;
+                    end if;
+                end if;
+                
+        end case;
+
     end process;
 
     -- Transfer size for DMAs depends on USB speed
