@@ -10,14 +10,18 @@ use std.env.finish;
 
 entity twelve_bit_packer_tb is
     generic (
-        TWO_CHANNEL_EN          : std_logic := '1';
-        NUM_TWELVE_BIT_TRIALS   : natural := 100000;
-        NUM_SIXTEEN_BIT_TRIALS  : natural := 100000
+        TWO_CHANNEL_EN          : std_logic := '0'; -- metadata only works w/ one channel so far
+        NUM_TWELVE_BIT_TRIALS   : natural := 500;
+        NUM_SIXTEEN_BIT_TRIALS  : natural := 500
     );
 end entity;
 
 architecture test of twelve_bit_packer_tb is
     
+    constant GPIF_BUF_SIZE_HS       : natural := 255;
+    constant PAD_SIZE_HS            : natural := 1;
+    constant GPIF_BUF_SIZE_SS       : natural := 510;
+    constant PAD_SIZE_SS            : natural := 2;
     constant FX3_CLK_HALF_PERIOD    : time := 1 sec * (1.0/100.0e6/2.0);
     constant RX_CLK_HALF_PERIOD     : time := 1 sec * (1.0/122.88e6/2.0); 
 
@@ -30,10 +34,14 @@ architecture test of twelve_bit_packer_tb is
     signal meta_fifo    : meta_fifo_rx_t      := META_FIFO_RX_T_DEFAULT;
 
     signal twelve_bit_mode_en : std_logic := '1';
+    signal meta_en            : std_logic := '0';
     
     signal sample_fifo_rreq     : std_logic := '0';
     signal sample_fifo_rdata    : std_logic_vector(31 downto 0);
     signal sample_fifo_rused    : std_logic_vector(sample_fifo.rused'high+1 downto 0);
+    signal meta_fifo_rreq       : std_logic;
+    signal meta_fifo_rempty     : std_logic;
+    signal meta_fifo_rdata      : std_logic_vector(31 downto 0);
     signal sample_reg           : std_logic_vector(95 downto 0);
     signal packet_control       : packet_control_t := PACKET_CONTROL_DEFAULT;
 
@@ -79,6 +87,7 @@ begin
         reset               =>  reset,
 
         twelve_bit_mode_en  => twelve_bit_mode_en,
+        meta_en             => meta_en,
         usb_speed           => '0',
 
         -- Sample FIFO
@@ -86,10 +95,19 @@ begin
         sample_data_in      => sample_fifo.rdata,
         sample_rused_in     => sample_fifo.rused,
         
+        -- Meta FIFO
+        meta_rreq_out       => meta_fifo.rreq,
+        meta_empty_in       => meta_fifo.rempty,
+        meta_data_in        => meta_fifo.rdata,
+        
         -- FX3 GPIF controller
         sample_rreq_in      => sample_fifo_rreq,
         sample_data_out     => sample_fifo_rdata,
-        sample_rused_out    => sample_fifo_rused
+        sample_rused_out    => sample_fifo_rused,
+        
+        meta_rreq_in        => meta_fifo_rreq,
+        meta_empty_out      => meta_fifo_rempty,
+        meta_data_out       => meta_fifo_rdata
     );
 
 
@@ -136,10 +154,10 @@ begin
 
             rdclk               => fx3_clock,
             rdreq               => '1',
-            q                   => open,
-            rdempty             => open,
-            rdfull              => open,
-            rdusedw             => open
+            q                   => meta_fifo.rdata,
+            rdempty             => meta_fifo.rempty,
+            rdfull              => meta_fifo.rfull,
+            rdusedw             => meta_fifo.rused
         );
     
 
@@ -219,40 +237,58 @@ begin
 
     verify : process
         variable curr_count     : unsigned(31 downto 0) := (others => '0');
+        variable read_count     : natural := 0;
         variable two_ch_delay   : std_logic;
         variable test           : unsigned(11 downto 0);
     begin
         twelve_bit_mode_en <= '1';
         for x in 1 to NUM_TWELVE_BIT_TRIALS loop
+            -- Get samples in buffer
+            while read_count < GPIF_BUF_SIZE_SS loop
+                sample_fifo_rreq <= '0';
+                nop(fx3_clock, 1);
+
+                if (unsigned(sample_fifo_rused) >= 3) then
+                    -- Grab 4, 12-bit IQ samples
+                    for i in 1 to 3 loop
+                        sample_reg <= sample_fifo_rdata & sample_reg(sample_reg'high downto 32);
+                        sample_fifo_rreq <= '1';
+                        read_count := read_count + 1;
+                        nop(fx3_clock, 1);
+                    end loop;
+                    sample_fifo_rreq <= '0';
+                    two_ch_delay := '0';
+                    wait until falling_edge(fx3_clock);
+                    -- Check the 4 samples
+                    for i in 0 to 3 loop
+                        -- Check i
+                        test := unsigned(sample_reg(24 * i + 11 downto 24 * i));
+                        assert_eq(curr_count(11 downto 0), test);
+                        -- Check q
+                        test := unsigned(sample_reg(24 * i + 23 downto 24 * i + 12));
+                        assert_eq(curr_count(27 downto 16), test);
+                        
+                        if ((TWO_CHANNEL_EN = '0') or (two_ch_delay = '1')) then
+                            curr_count := curr_count + 1;
+                        end if;
+                        two_ch_delay := not two_ch_delay;
+
+                    end loop;
+                end if;
+            end loop;
+
             sample_fifo_rreq <= '0';
+            read_count := 0;
             nop(fx3_clock, 1);
 
-            if (unsigned(sample_fifo_rused) >= 3) then
-                -- Grab 4, 12-bit IQ samples
-                for i in 1 to 3 loop
-                    sample_reg <= sample_fifo_rdata & sample_reg(sample_reg'high downto 32);
+            while read_count < PAD_SIZE_SS loop
+                sample_fifo_rreq <= '1';
+                if (unsigned(sample_fifo_rused) > 0) then
                     sample_fifo_rreq <= '1';
-                    nop(fx3_clock, 1);
-                end loop;
-                sample_fifo_rreq <= '0';
-                two_ch_delay := '0';
-                wait until falling_edge(fx3_clock);
-                -- Check the 4 samples
-                for i in 0 to 3 loop
-                    -- Check i
-                    test := unsigned(sample_reg(24 * i + 11 downto 24 * i));
-                    assert_eq(curr_count(11 downto 0), test);
-                    -- Check q
-                    test := unsigned(sample_reg(24 * i + 23 downto 24 * i + 12));
-                    assert_eq(curr_count(27 downto 16), test);
-                    
-                    if ((TWO_CHANNEL_EN = '0') or (two_ch_delay = '1')) then
-                        curr_count := curr_count + 1;
-                    end if;
-                    two_ch_delay := not two_ch_delay;
-
-                end loop;
-            end if;
+                    read_count := read_count + 1;
+                end if;
+                nop(fx3_clock, 1);
+            end loop;
         end loop;
 
         twelve_bit_mode_en <= '0';

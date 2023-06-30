@@ -176,7 +176,6 @@ begin
                 if (sample_rreq_in = '1') then
                     future.loading <= '1';
                     future.state <= PACK_1;
-                    future.sample_downcount <= current.sample_downcount - 1;
                 elsif (current.loading = '0' and twelve_bit_mode_en = '0') then
                     future.state <= PASS_0;
                 end if;
@@ -189,7 +188,6 @@ begin
 
                 if (sample_rreq_in = '1') then
                     future.state <= PACK_2;
-                    future.sample_downcount <= current.sample_downcount - 1;
                 end if;
             
             when PACK_2 =>
@@ -197,8 +195,8 @@ begin
                 sample_data_out <= current.q1_p & current.i1_p & current.q0_p(11 downto 4);
 
                 if (sample_rreq_in = '1') then
-                    future.sample_downcount <= current.sample_downcount - 1;
-                    if (current.sample_downcount = 1) then
+                    future.sample_downcount <= current.sample_downcount - 3;
+                    if (current.sample_downcount = 3) then
                         if (current.padding_downcount = 0) then
                             future.loading <= '0';
                             future.state <= PACK_0;
@@ -255,7 +253,7 @@ begin
 
             when READ =>
                 if (meta_empty_in = '0') then
-                    discontinuous := timestamp_in - meta_current.timestamp /= 508;
+                    discontinuous := '1' when timestamp_in - meta_current.timestamp /= 508 else '0';
                     if (meta_current.skip_downcount = 3) then
                         discontinuous := meta_current.prev_discontinuous or discontinuous;
                     end if;
