@@ -12,17 +12,27 @@ entity twelve_bit_packer is
         clock               : in std_logic;
         reset               : in std_logic;
         twelve_bit_mode_en  : in std_logic;
+        meta_en             : in std_logic;
         usb_speed           : in std_logic;
 
         -- Sample FIFO
-        sample_rreq_out    : out std_logic;
+        sample_rreq_out     : out std_logic;
         sample_data_in      : in std_logic_vector(63 downto 0);
         sample_rused_in     : in std_logic_vector(FIFO_USEDR_WIDTH-1 downto 0);
+
+        -- Meta FIFO
+        meta_rreq_out       : out std_logic;
+        meta_empty_in       : in std_logic;
+        meta_data_in        : in std_logic_vector(127 downto 0);
         
         -- FX3 GPIF controller
-        sample_rreq_in     : in std_logic;
+        sample_rreq_in      : in std_logic;
         sample_data_out     : out std_logic_vector(31 downto 0);
-        sample_rused_out    : out std_logic_vector(FIFO_USEDR_WIDTH downto 0)
+        sample_rused_out    : out std_logic_vector(FIFO_USEDR_WIDTH downto 0);
+
+        meta_rreq_in        : in std_logic;
+        meta_empty_out      : out std_logic;
+        meta_data_out       : out std_logic_vector(31 downto 0)
 
     );
 end entity;
@@ -114,8 +124,13 @@ begin
 
             when PACK_0 =>
                 if (current.loading = '0') then
-                    future.sample_downcount <= gpif_buf_size - 3;
-                    future.padding_downcount <= padding_size - 1;
+                    if (meta_en = '1') then
+                        future.sample_downcount <= gpif_buf_size - 3;
+                        future.padding_downcount <= padding_size - 1;
+                    else
+                        future.sample_downcount <= gpif_buf_size;
+                        future.padding_downcount <= padding_size;
+                    end if;
                 end if;
 
                 sample_data_out <= i1(7 downto 0) & q0 & i0;
@@ -125,6 +140,7 @@ begin
                 if (sample_rreq_in = '1') then
                     future.loading <= '1';
                     future.state <= PACK_1;
+                    future.sample_downcount <= current.sample_downcount - 1;
                 elsif (current.loading = '0' and twelve_bit_mode_en = '0') then
                     future.state <= PASS_0;
                 end if;
@@ -137,6 +153,7 @@ begin
 
                 if (sample_rreq_in = '1') then
                     future.state <= PACK_2;
+                    future.sample_downcount <= current.sample_downcount - 1;
                 end if;
             
             when PACK_2 =>
@@ -144,10 +161,15 @@ begin
                 sample_data_out <= current.q1_p & current.i1_p & current.q0_p(11 downto 4);
 
                 if (sample_rreq_in = '1') then
-                    if (current.sample_downcount = 0) then
-                        future.state <= PAD;
+                    future.sample_downcount <= current.sample_downcount - 1;
+                    if (current.sample_downcount = 1) then
+                        if (current.padding_downcount = 0) then
+                            future.loading <= '0';
+                            future.state <= PACK_0;
+                        else
+                            future.state <= PAD;
+                        end if;
                     else
-                        future.sample_downcount <= current.sample_downcount - 3;
                         future.state <= PACK_0;
                     end if;
                 end if;
@@ -157,11 +179,10 @@ begin
                 sample_data_out <= (others => '1');
 
                 if (sample_rreq_in = '1') then
-                    if (current.padding_downcount = 0) then
+                    future.padding_downcount <= current.padding_downcount - 1;
+                    if (current.padding_downcount = 1) then
                         future.loading <= '0';
                         future.state <= PACK_0;
-                    else
-                        future.padding_downcount <= current.padding_downcount - 1;
                     end if;
                 end if;
             

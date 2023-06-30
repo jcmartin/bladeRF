@@ -179,7 +179,7 @@ package bladerf_p is
     constant META_FIFO_TX_LENGTH    : natural := 512;   -- 32-bit words
 
     constant META_FIFO_RX_WWIDTH    : natural := 128;   -- write side data width
-    constant META_FIFO_RX_RWIDTH    : natural := 32;    -- read side data width
+    constant META_FIFO_RX_RWIDTH    : natural := 128;   -- read side data width
     constant META_FIFO_RX_LENGTH    : natural := 512;   -- 32-bit words
 
     type tx_fifo_t is record

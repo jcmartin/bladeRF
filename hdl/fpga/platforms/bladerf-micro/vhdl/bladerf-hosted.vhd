@@ -69,6 +69,9 @@ architecture hosted_bladerf of bladerf is
     signal rx_sample_fifo_rreq    : std_logic;
     signal rx_sample_fifo_rdata   : std_logic_vector(31 downto 0);
     signal rx_sample_fifo_rused   : std_logic_vector(rx_sample_fifo.rused'high+1 downto 0);
+    signal rx_meta_fifo_rreq      : std_logic;
+    signal rx_meta_fifo_rempty    : std_logic;
+    signal rx_meta_fifo_rdata     : std_logic_vector(31 downto 0);
 
     signal tx_loopback_fifo       : loopback_fifo_t := LOOPBACK_FIFO_T_DEFAULT;
 
@@ -280,17 +283,26 @@ begin
             reset               =>  sys_reset_pclk,
 
             twelve_bit_mode_en  => twelvebit_en_pclk,
+            meta_en             => meta_en_pclk,
             usb_speed           => usb_speed_pclk,
 
             -- Sample FIFO
-            sample_rreq_out    => rx_sample_fifo.rreq,
+            sample_rreq_out     => rx_sample_fifo.rreq,
             sample_data_in      => rx_sample_fifo.rdata,
             sample_rused_in     => rx_sample_fifo.rused,
             
+            -- Meta FIFO
+            meta_rreq_out       => rx_meta_fifo.rreq,
+            meta_empty_in       => rx_meta_fifo.rempty,
+            meta_data_in        => rx_meta_fifo.rdata,
+            
             -- FX3 GPIF controller
-            sample_rreq_in     => rx_sample_fifo_rreq,
+            sample_rreq_in      => rx_sample_fifo_rreq,
             sample_data_out     => rx_sample_fifo_rdata,
-            sample_rused_out    => rx_sample_fifo_rused
+            sample_rused_out    => rx_sample_fifo_rused,
+            meta_rreq_in        => rx_meta_fifo_rreq,
+            meta_empty_out      => rx_meta_fifo_rempty,
+            meta_data_out       => rx_meta_fifo_rdata
         );
 
     -- FX3 GPIF
@@ -332,11 +344,11 @@ begin
             rx_fifo_usedw       =>  rx_sample_fifo_rused,
             rx_fifo_data        =>  rx_sample_fifo_rdata,
 
-            rx_meta_fifo_read   =>  rx_meta_fifo.rreq,
+            rx_meta_fifo_read   =>  rx_meta_fifo_rreq,
             rx_meta_fifo_full   =>  rx_meta_fifo.rfull,
-            rx_meta_fifo_empty  =>  rx_meta_fifo.rempty,
+            rx_meta_fifo_empty  =>  rx_meta_fifo_rempty,
             rx_meta_fifo_usedr  =>  rx_meta_fifo.rused,
-            rx_meta_fifo_data   =>  rx_meta_fifo.rdata
+            rx_meta_fifo_data   =>  rx_meta_fifo_rdata
         );
 
     -- FX3 GPIF bidirectional signal control
