@@ -11,10 +11,8 @@ use std.env.finish;
 entity twelve_bit_packer_tb is
     generic (
         TWO_CHANNEL_EN              : std_logic := '0'; -- metadata only works w/ one channel so far
-        -- NUM_TWELVE_BIT_TRIALS       : natural := 500;
-        -- NUM_SIXTEEN_BIT_TRIALS      : natural := 500;
-        NUM_TWELVE_BIT_TRIALS       : natural := 0;
-        NUM_SIXTEEN_BIT_TRIALS      : natural := 0;
+        NUM_TWELVE_BIT_TRIALS       : natural := 500;
+        NUM_SIXTEEN_BIT_TRIALS      : natural := 500;
         NUM_TWELVE_BIT_META_TRIALS  : natural := 127 * 4 -- 676 (num 12-bit samples) * 127 = LCM of 508
     );
 end entity;
@@ -242,6 +240,7 @@ begin
         variable curr_count     : unsigned(31 downto 0) := (others => '0');
         variable curr_ts        : unsigned(63 downto 0) := (others => '0');
         variable next_ts        : unsigned(63 downto 0) := (others => '0');
+        variable temp           : unsigned(11 downto 0);
         variable buf_size       : natural;
         variable pad_size       : natural;
         variable two_ch_delay   : std_logic;
@@ -325,9 +324,38 @@ begin
         end procedure get_meta;
 
     begin
+        twelve_bit_mode_en <= '1';
+        sample_fifo_rreq <= '0';
+        meta_en <= '1';
+        buf_size := BUF_SIZE_SS - 3;
+        pad_size := PAD_SIZE_SS - 1;
+        nop(fx3_clock, 1);
+        
+        -- Get initial timestamp
+        get_meta;
+        curr_ts := next_ts;
+        -- FIFO writer will holdoff the first time metadata is written...?
+        -- So adjust current count (assuming holdoff is very small)
+        -- This has to happen first otherwise the skip is in the middle of buf
+        wait until unsigned(sample_fifo_rused) > 0;
+        temp := unsigned(sample_fifo_rdata(11 downto 0));
+        curr_count := curr_count + (temp - curr_count(11 downto 0));
+        get_twelve_bit_buf;
+
+        for x in 2 to NUM_TWELVE_BIT_META_TRIALS loop
+            get_meta;
+            assert_eq("timestamp", curr_ts, next_ts - 676);
+            curr_ts := next_ts;
+            get_twelve_bit_buf;
+        end loop;
+
         buf_size := BUF_SIZE_SS;
         pad_size := PAD_SIZE_SS;
         twelve_bit_mode_en <= '1';
+        sample_fifo_rreq <= '0';
+        meta_en <= '0';
+        nop(fx3_clock, 1);
+
         for x in 1 to NUM_TWELVE_BIT_TRIALS loop
             get_twelve_bit_buf;
         end loop;
@@ -351,29 +379,6 @@ begin
             else
                 nop(fx3_clock, 1);
             end if;
-        end loop;
-
-        twelve_bit_mode_en <= '1';
-        sample_fifo_rreq <= '0';
-        meta_en <= '1';
-        buf_size := BUF_SIZE_SS - 3;
-        pad_size := PAD_SIZE_SS - 1;
-        nop(fx3_clock, 1);
-
-        -- FIFO writer will holdoff the first time metadata is written...
-        if (TWO_CHANNEL_EN = '1') then
-            curr_count := curr_count + 1;
-        else
-            curr_count := curr_count + 2;
-        end if;
-
-        for x in 1 to NUM_TWELVE_BIT_META_TRIALS loop
-            get_meta;
-            if (x = 1) then curr_ts := next_ts - 676; end if;
-            assert_eq("timestamp", curr_ts + 676, next_ts);
-            curr_ts := next_ts;
-
-            get_twelve_bit_buf;
         end loop;
         
         finish;
