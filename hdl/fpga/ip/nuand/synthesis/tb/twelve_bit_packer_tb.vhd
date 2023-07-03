@@ -10,17 +10,20 @@ use std.env.finish;
 
 entity twelve_bit_packer_tb is
     generic (
-        TWO_CHANNEL_EN          : std_logic := '0'; -- metadata only works w/ one channel so far
-        NUM_TWELVE_BIT_TRIALS   : natural := 500;
-        NUM_SIXTEEN_BIT_TRIALS  : natural := 500
+        TWO_CHANNEL_EN              : std_logic := '0'; -- metadata only works w/ one channel so far
+        -- NUM_TWELVE_BIT_TRIALS       : natural := 500;
+        -- NUM_SIXTEEN_BIT_TRIALS      : natural := 500;
+        NUM_TWELVE_BIT_TRIALS       : natural := 0;
+        NUM_SIXTEEN_BIT_TRIALS      : natural := 0;
+        NUM_TWELVE_BIT_META_TRIALS  : natural := 127 -- 676 (num 12-bit samples) * 127 = LCM of 508
     );
 end entity;
 
 architecture test of twelve_bit_packer_tb is
     
-    constant GPIF_BUF_SIZE_HS       : natural := 255;
+    constant BUF_SIZE_HS            : natural := 255;
     constant PAD_SIZE_HS            : natural := 1;
-    constant GPIF_BUF_SIZE_SS       : natural := 510;
+    constant BUF_SIZE_SS            : natural := 510;
     constant PAD_SIZE_SS            : natural := 2;
     constant FX3_CLK_HALF_PERIOD    : time := 1 sec * (1.0/100.0e6/2.0);
     constant RX_CLK_HALF_PERIOD     : time := 1 sec * (1.0/122.88e6/2.0); 
@@ -55,11 +58,11 @@ architecture test of twelve_bit_packer_tb is
             wait until falling_edge(clock);
         end loop;
     end procedure;
-   
-    procedure assert_eq(expected : unsigned; actual : unsigned) is
+
+    procedure assert_eq(check : string; expected : unsigned; actual : unsigned) is
     begin
         assert(actual = expected)
-            report "Unexpected sample, expected: " & integer'image(to_integer(expected)) &
+            report "Unexpected " & check & " , expected: " & integer'image(to_integer(expected)) &
                    " got: " & integer'image(to_integer(actual))
             severity failure;
     end procedure;
@@ -176,7 +179,7 @@ begin
             enable              =>  '1',
 
             usb_speed           =>  '0', -- SS
-            meta_en             =>  '0',
+            meta_en             =>  meta_en,
             packet_en           =>  '0',
             timestamp           =>  timestamp,
             mini_exp            =>  "00",
@@ -237,14 +240,18 @@ begin
 
     verify : process
         variable curr_count     : unsigned(31 downto 0) := (others => '0');
-        variable read_count     : natural := 0;
+        variable curr_ts        : unsigned(63 downto 0) := (others => '0');
+        variable next_ts        : unsigned(63 downto 0) := (others => '0');
+        variable buf_size       : natural;
+        variable pad_size       : natural;
         variable two_ch_delay   : std_logic;
-        variable test           : unsigned(11 downto 0);
-    begin
-        twelve_bit_mode_en <= '1';
-        for x in 1 to NUM_TWELVE_BIT_TRIALS loop
-            -- Get samples in buffer
-            while read_count < GPIF_BUF_SIZE_SS loop
+        
+        procedure get_twelve_bit_buf is
+            variable read_count : natural := 0;
+            variable test       : unsigned(11 downto 0);
+        begin
+            -- Get samplesin buffer
+            while read_count < buf_size loop
                 sample_fifo_rreq <= '0';
                 nop(fx3_clock, 1);
 
@@ -263,10 +270,11 @@ begin
                     for i in 0 to 3 loop
                         -- Check i
                         test := unsigned(sample_reg(24 * i + 11 downto 24 * i));
-                        assert_eq(curr_count(11 downto 0), test);
+                        report integer'image(i) & " " & integer'image(to_integer(test));
+                        assert_eq("sample", curr_count(11 downto 0), test);
                         -- Check q
                         test := unsigned(sample_reg(24 * i + 23 downto 24 * i + 12));
-                        assert_eq(curr_count(27 downto 16), test);
+                        assert_eq("sample", curr_count(27 downto 16), test);
                         
                         if ((TWO_CHANNEL_EN = '0') or (two_ch_delay = '1')) then
                             curr_count := curr_count + 1;
@@ -281,25 +289,58 @@ begin
             read_count := 0;
             nop(fx3_clock, 1);
 
-            while read_count < PAD_SIZE_SS loop
-                sample_fifo_rreq <= '1';
+            while read_count < pad_size loop
                 if (unsigned(sample_fifo_rused) > 0) then
                     sample_fifo_rreq <= '1';
                     read_count := read_count + 1;
                 end if;
                 nop(fx3_clock, 1);
+                sample_fifo_rreq <= '0';
             end loop;
+        end procedure get_twelve_bit_buf;
+
+        procedure get_meta is
+            variable temp : std_logic_vector(31 downto 0);
+        begin
+            meta_fifo_rreq <= '0';
+            loop
+                if (meta_fifo_rempty = '0') then
+                    -- TS is 95 downto 32, starts with LSB first
+                    meta_fifo_rreq <= '1';
+                    -- 31 downto 0
+                    nop(fx3_clock, 1);
+                    -- 63 downto 32
+                    temp := meta_fifo_rdata;
+                    nop(fx3_clock, 1);
+                    -- 95 downto 64
+                    next_ts := unsigned(meta_fifo_rdata & temp);
+                    nop(fx3_clock, 1);
+                    -- 127 downto 96
+                    nop(fx3_clock, 1);
+                    meta_fifo_rreq <= '0';
+                    exit;
+                end if;
+                nop(fx3_clock, 1);
+            end loop;
+
+        end procedure get_meta;
+
+    begin
+        buf_size := BUF_SIZE_SS;
+        pad_size := PAD_SIZE_SS;
+        twelve_bit_mode_en <= '1';
+        for x in 1 to NUM_TWELVE_BIT_TRIALS loop
+            get_twelve_bit_buf;
         end loop;
 
         twelve_bit_mode_en <= '0';
         sample_fifo_rreq <= '0';
         two_ch_delay := '0';
         nop(fx3_clock, 1);
-        for i in 0 to NUM_SIXTEEN_BIT_TRIALS-1 loop
-
+        for x in 1 to NUM_SIXTEEN_BIT_TRIALS loop
             if (unsigned(sample_fifo_rused) > 0) then
                 -- Check current fifo output
-                assert_eq(curr_count, unsigned(sample_fifo_rdata));
+                assert_eq("sample", curr_count, unsigned(sample_fifo_rdata));
                 sample_fifo_rreq <= '1';
                 nop(fx3_clock, 1);
                 sample_fifo_rreq <= '0';
@@ -311,7 +352,29 @@ begin
             else
                 nop(fx3_clock, 1);
             end if;
+        end loop;
 
+        twelve_bit_mode_en <= '1';
+        sample_fifo_rreq <= '0';
+        meta_en <= '1';
+        buf_size := BUF_SIZE_SS - 3;
+        pad_size := PAD_SIZE_SS - 1;
+        nop(fx3_clock, 1);
+
+        -- FIFO writer will holdoff the first time metadata is written...
+        if (TWO_CHANNEL_EN = '1') then
+            curr_count := curr_count + 1;
+        else
+            curr_count := curr_count + 2;
+        end if;
+
+        for x in 1 to NUM_TWELVE_BIT_META_TRIALS loop
+            get_meta;
+            if (x = 1) then curr_ts := next_ts - 676; end if;
+            assert_eq("timestamp", curr_ts + 676, next_ts);
+            curr_ts := next_ts;
+
+            get_twelve_bit_buf;
         end loop;
         
         finish;

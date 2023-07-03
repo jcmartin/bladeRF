@@ -263,6 +263,7 @@ begin
                         meta_current.prev_meta_data(127 downto 96) &
                         std_logic_vector(meta_current.timestamp + meta_current.offset) & x"12344321";
 
+                    meta_future.timestamp <= timestamp_in;
                     meta_future.prev_meta_data <= meta_data_in;
                     meta_future.prev_discontinuous <= discontinuous;
 
@@ -279,8 +280,8 @@ begin
                         meta_rreq_out <= '1'; -- ack
                         meta_future.state <= WRITE;
                         meta_future.write_downcount <= 3;
-                        meta_future.skip_downcount <= meta_future.skip_downcount - 1;
-                        meta_future.offset <= meta_future.offset + 168;
+                        meta_future.skip_downcount <= meta_current.skip_downcount - 1;
+                        meta_future.offset <= meta_current.offset + 168;
                     end if;
 
                 end if;
@@ -294,7 +295,7 @@ begin
                         meta_future.state <= meta_current.ret;
                     else
                         meta_future.meta_data <= x"00000000" & meta_current.meta_data(127 downto 32);
-                        meta_future.write_downcount <= meta_future.write_downcount - 1;
+                        meta_future.write_downcount <= meta_current.write_downcount - 1;
                     end if;
                 end if;
                 
