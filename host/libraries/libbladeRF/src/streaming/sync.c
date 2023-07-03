@@ -168,11 +168,8 @@ int sync_init(struct bladerf_sync *sync,
         }
     }
 
-    if (format == BLADERF_FORMAT_SC12_Q11 || format == BLADERF_FORMAT_SC12_Q11_META) {
-        // TODO: remove once RX implemented
-        log_error("12-bit mode not yet supported");
-        return BLADERF_ERR_UNSUPPORTED;
-        if ((layout & BLADERF_DIRECTION_MASK) == BLADERF_TX) {
+    if (format == BLADERF_FORMAT_SC12_Q11_META) {
+        if ((layout & BLADERF_DIRECTION_MASK) == BLADERF_TX || (layout == BLADERF_RX_X2)) {
             log_error("TX for 12-bit mode is not supported");
             return BLADERF_ERR_UNSUPPORTED;
         }
@@ -186,6 +183,8 @@ int sync_init(struct bladerf_sync *sync,
 
         case BLADERF_FORMAT_SC16_Q11:
         case BLADERF_FORMAT_SC16_Q11_META:
+        case BLADERF_FORMAT_SC12_Q11:
+        case BLADERF_FORMAT_SC12_Q11_META:
         case BLADERF_FORMAT_PACKET_META:
             bytes_per_sample = 4;
             break;
@@ -421,6 +420,7 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
 
     if (s->stream_config.format == BLADERF_FORMAT_SC16_Q11_META ||
           s->stream_config.format == BLADERF_FORMAT_SC8_Q7_META ||
+          s->stream_config.format == BLADERF_FORMAT_SC12_Q11_META ||
           s->stream_config.format == BLADERF_FORMAT_PACKET_META) {
         if (user_meta == NULL) {
             log_debug("NULL metadata pointer passed to %s\n", __FUNCTION__);
@@ -532,11 +532,13 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                 switch (s->stream_config.format) {
                     case BLADERF_FORMAT_SC16_Q11:
                     case BLADERF_FORMAT_SC8_Q7:
+                    case BLADERF_FORMAT_SC12_Q11:
                         s->state = SYNC_STATE_USING_BUFFER;
                         break;
 
                     case BLADERF_FORMAT_SC16_Q11_META:
                     case BLADERF_FORMAT_SC8_Q7_META:
+                    case BLADERF_FORMAT_SC12_Q11_META:
                         s->state = SYNC_STATE_USING_BUFFER_META;
                         s->meta.curr_msg_off = 0;
                         s->meta.msg_num = 0;
@@ -684,10 +686,16 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
 
                             copied_data = true;
 
-                            if (s->stream_config.layout == BLADERF_RX_X2)
-                               s->meta.curr_timestamp += samples_to_copy / 2;
-                            else
-                               s->meta.curr_timestamp += samples_to_copy;
+                            // TODO: If there is an easy way to do so, integrate
+                            // with rest of sync_rx logic
+                            if (s->stream_config.format == BLADERF_FORMAT_SC12_Q11_META) {
+                                s->meta.curr_timestamp += 676;
+                            } else {
+                                if (s->stream_config.layout == BLADERF_RX_X2)
+                                   s->meta.curr_timestamp += samples_to_copy / 2;
+                                else
+                                   s->meta.curr_timestamp += samples_to_copy;
+                            }
 
                             /* We've begun copying samples, so our target will
                              * just keep tracking the current timestamp. */

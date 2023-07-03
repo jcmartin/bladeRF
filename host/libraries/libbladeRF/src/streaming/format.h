@@ -74,6 +74,8 @@ static inline size_t samples_to_bytes(bladerf_format format, size_t n)
 
         case BLADERF_FORMAT_SC16_Q11:
         case BLADERF_FORMAT_SC16_Q11_META:
+        case BLADERF_FORMAT_SC12_Q11:
+        case BLADERF_FORMAT_SC12_Q11_META:
             return sc16q11_to_bytes(n);
 
         case BLADERF_FORMAT_PACKET_META:
@@ -95,6 +97,8 @@ static inline size_t bytes_to_samples(bladerf_format format, size_t n)
 
         case BLADERF_FORMAT_SC16_Q11:
         case BLADERF_FORMAT_SC16_Q11_META:
+        case BLADERF_FORMAT_SC12_Q11:
+        case BLADERF_FORMAT_SC12_Q11_META:
             return bytes_to_sc16q11(n);
 
         case BLADERF_FORMAT_PACKET_META:
