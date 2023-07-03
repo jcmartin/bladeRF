@@ -256,7 +256,14 @@ begin
                     -- TODO: figure out a way to pass on discontinuity info 
                     meta_future.state <= IDLE;
                 elsif (meta_empty_in = '0') then
-                    discontinuous := '1' when timestamp_in - meta_current.timestamp /= 508 else '0';
+                    -- TODO: this should be double buffered to check two metas
+                    -- in the future and determine discontinuity over entire region
+                    if (timestamp_in - meta_current.timestamp /= 508) then
+                        discontinuous := '1';
+                    else
+                        discontinuous := '0';
+                    end if;
+
                     if (meta_current.skip_downcount = 3) then
                         discontinuous := meta_current.prev_discontinuous or discontinuous;
                     end if;
