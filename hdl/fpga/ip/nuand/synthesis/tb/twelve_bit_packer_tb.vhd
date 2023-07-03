@@ -15,7 +15,7 @@ entity twelve_bit_packer_tb is
         -- NUM_SIXTEEN_BIT_TRIALS      : natural := 500;
         NUM_TWELVE_BIT_TRIALS       : natural := 0;
         NUM_SIXTEEN_BIT_TRIALS      : natural := 0;
-        NUM_TWELVE_BIT_META_TRIALS  : natural := 127 -- 676 (num 12-bit samples) * 127 = LCM of 508
+        NUM_TWELVE_BIT_META_TRIALS  : natural := 127 * 4 -- 676 (num 12-bit samples) * 127 = LCM of 508
     );
 end entity;
 
@@ -270,7 +270,6 @@ begin
                     for i in 0 to 3 loop
                         -- Check i
                         test := unsigned(sample_reg(24 * i + 11 downto 24 * i));
-                        report integer'image(i) & " " & integer'image(to_integer(test));
                         assert_eq("sample", curr_count(11 downto 0), test);
                         -- Check q
                         test := unsigned(sample_reg(24 * i + 23 downto 24 * i + 12));

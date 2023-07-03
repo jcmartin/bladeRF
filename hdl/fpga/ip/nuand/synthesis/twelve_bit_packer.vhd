@@ -63,9 +63,9 @@ architecture arch of twelve_bit_packer is
         state               : meta_state_t;
         ret                 : meta_state_t;
         timestamp           : unsigned(63 downto 0);
-        offset              : integer range 0 to 504;
+        offset              : integer range 0 to 672;
         offset_delta        : integer range 0 to 168;
-        skip_downcount      : integer range 0 to 3;
+        skip_downcount      : integer range 0 to 4;
         write_downcount     : integer range 0 to 3;
         meta_data           : std_logic_vector(127 downto 0);
         prev_meta_data      : std_logic_vector(127 downto 0);
@@ -242,8 +242,8 @@ begin
                         meta_future.state <= READ;
                         meta_future.ret <= READ;
                         meta_future.offset <= 0;
-                        meta_future.offset_delta <= 0;
-                        meta_future.skip_downcount <= 3;
+                        meta_future.offset_delta <= 4;
+                        meta_future.skip_downcount <= 4;
                     else
                         meta_future.meta_data <= meta_data_in;
                         meta_future.ret <= IDLE;
@@ -252,7 +252,10 @@ begin
                 end if;
 
             when READ =>
-                if (meta_empty_in = '0') then
+                if (meta_current.skip_downcount = 0 and meta_current.offset_delta = 168) then
+                    -- TODO: figure out a way to pass on discontinuity info 
+                    meta_future.state <= IDLE;
+                elsif (meta_empty_in = '0') then
                     discontinuous := '1' when timestamp_in - meta_current.timestamp /= 508 else '0';
                     if (meta_current.skip_downcount = 3) then
                         discontinuous := meta_current.prev_discontinuous or discontinuous;
@@ -268,14 +271,10 @@ begin
                     meta_future.prev_discontinuous <= discontinuous;
 
                     if (meta_current.skip_downcount = 0) then
-                        if (meta_current.offset_delta = 168) then
-                            meta_future.state <= IDLE;
-                        else
-                            meta_future.state <= READ;
-                            meta_future.skip_downcount <= 3;
-                            meta_future.offset <= 168 - meta_current.offset_delta;
-                            meta_future.offset_delta <= meta_current.offset_delta + 4;
-                        end if;
+                        meta_future.state <= READ;
+                        meta_future.skip_downcount <= 3;
+                        meta_future.offset <= 168 - meta_current.offset_delta;
+                        meta_future.offset_delta <= meta_current.offset_delta + 4;
                     else
                         meta_rreq_out <= '1'; -- ack
                         meta_future.state <= WRITE;
