@@ -2739,6 +2739,10 @@ int CALL_CONV bladerf_get_timestamp(struct bladerf *dev,
  *                              `num_xfers` parameter.
  * @param[in]   buffer_size     The size of the underlying stream buffers, in
  *                              samples. This value must be a multiple of 1024.
+ *                              For the 12-bit case, buffer size is calculated
+ *                              in terms of 16-bit sample sizes, and can specify
+ *                              number of actual 12-bit samples in the sync_rx
+ *                              call.
  *                              Note that samples are only transferred when a
  *                              buffer of this size is filled.
  * @param[in]   num_transfers   The number of active USB transfers that may be

@@ -36,6 +36,7 @@
 #include "sync_worker.h"
 #include "metadata.h"
 
+#include "backend/usb/usb.h"
 #include "board/board.h"
 #include "helpers/timeout.h"
 #include "helpers/have_cap.h"
@@ -112,18 +113,17 @@ static inline size_t samples2bytes(struct bladerf_sync *s, size_t n) {
     return s->stream_config.bytes_per_sample * n;
 }
 
-static inline unsigned int msg_per_buf(size_t msg_size, size_t buf_size,
-                                       size_t bytes_per_sample)
-{
-    size_t n = buf_size / (msg_size / bytes_per_sample);
+static inline unsigned int msg_per_buf(size_t msg_size, size_t buf_size) {
+    size_t n = buf_size / msg_size;
     assert(n <= UINT_MAX);
     return (unsigned int) n;
 }
 
 static inline unsigned int samples_per_msg(size_t msg_size,
-                                           size_t bytes_per_sample)
+                                           size_t bytes_per_sample,
+                                           size_t msg_padding)
 {
-    size_t n = (msg_size - METADATA_HEADER_SIZE) / bytes_per_sample;
+    size_t n = (msg_size - msg_padding) / bytes_per_sample;
     assert(n <= UINT_MAX);
     return (unsigned int) n;
 }
@@ -140,7 +140,7 @@ int sync_init(struct bladerf_sync *sync,
 
 {
     int status = 0;
-    size_t i, bytes_per_sample;
+    size_t i, bytes_per_sample, buffer_size_bytes, msg_padding;
 
     if (num_transfers >= num_buffers) {
         return BLADERF_ERR_INVAL;
@@ -175,6 +175,7 @@ int sync_init(struct bladerf_sync *sync,
         }
     }
 
+    msg_padding = 0;
     switch (format) {
         case BLADERF_FORMAT_SC8_Q7:
         case BLADERF_FORMAT_SC8_Q7_META:
@@ -183,10 +184,16 @@ int sync_init(struct bladerf_sync *sync,
 
         case BLADERF_FORMAT_SC16_Q11:
         case BLADERF_FORMAT_SC16_Q11_META:
-        case BLADERF_FORMAT_SC12_Q11:
-        case BLADERF_FORMAT_SC12_Q11_META:
         case BLADERF_FORMAT_PACKET_META:
             bytes_per_sample = 4;
+            break;
+        
+        case BLADERF_FORMAT_SC12_Q11:
+            bytes_per_sample = 3;
+            msg_padding = msg_size == USB_MSG_SIZE_SS ? 8 : 4;
+        case BLADERF_FORMAT_SC12_Q11_META:
+            bytes_per_sample = 3;
+            msg_padding = msg_size == USB_MSG_SIZE_SS ? 4 : 0;
             break;
 
         default:
@@ -194,9 +201,14 @@ int sync_init(struct bladerf_sync *sync,
             return BLADERF_ERR_INVAL;
     }
 
+    buffer_size_bytes = bytes_per_sample * buffer_size;
+    // Treat buffer_size as number of 16-bit samples in the 12-bit case
+    if (format == BLADERF_FORMAT_SC12_Q11 || format == BLADERF_FORMAT_SC12_Q11_META)
+        buffer_size_bytes = 4 * buffer_size;
     /* bladeRF GPIF DMA requirement */
-    if ((bytes_per_sample * buffer_size) % 4096 != 0) {
-        return BLADERF_ERR_INVAL;
+    // SC12_Q11 pads each message
+    if (buffer_size_bytes % 4096 != 0) {
+            return BLADERF_ERR_INVAL;
     }
 
     /* Deinitialize sync handle if it's initialized */
@@ -221,15 +233,17 @@ int sync_init(struct bladerf_sync *sync,
 
     sync->stream_config.layout = layout;
     sync->stream_config.format = format;
-    sync->stream_config.samples_per_buffer = (unsigned int)buffer_size;
+    sync->stream_config.msg_padding = msg_padding;
+    sync->stream_config.samples_per_msg = samples_per_msg(msg_size, bytes_per_sample, msg_padding);
+    sync->stream_config.msg_per_buffer = msg_per_buf(msg_size, buffer_size_bytes);
     sync->stream_config.num_xfers = num_transfers;
     sync->stream_config.timeout_ms = stream_timeout;
     sync->stream_config.bytes_per_sample = bytes_per_sample;
 
     sync->meta.state = SYNC_META_STATE_HEADER;
     sync->meta.msg_size = msg_size;
-    sync->meta.msg_per_buf = msg_per_buf(msg_size, buffer_size, bytes_per_sample);
-    sync->meta.samples_per_msg = samples_per_msg(msg_size, bytes_per_sample);
+    sync->meta.msg_per_buf = msg_per_buf(msg_size, buffer_size_bytes);
+    sync->meta.samples_per_msg = samples_per_msg(msg_size, bytes_per_sample, msg_padding + METADATA_HEADER_SIZE);
 
     log_verbose("%s: Buffer size (in bytes): %u\n",
                 __FUNCTION__, buffer_size * bytes_per_sample);
@@ -433,7 +447,7 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
     }
 
     b = &s->buf_mgmt;
-    samples_per_buffer = s->stream_config.samples_per_buffer;
+    samples_per_buffer = s->stream_config.msg_per_buffer * s->stream_config.samples_per_msg;
 
     log_verbose("%s: Requests %u samples.\n", __FUNCTION__, num_samples);
 
@@ -532,8 +546,13 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                 switch (s->stream_config.format) {
                     case BLADERF_FORMAT_SC16_Q11:
                     case BLADERF_FORMAT_SC8_Q7:
-                    case BLADERF_FORMAT_SC12_Q11:
                         s->state = SYNC_STATE_USING_BUFFER;
+                        break;
+
+                    case BLADERF_FORMAT_SC12_Q11:
+                        s->state = SYNC_STATE_USING_BUFFER_PAD;
+                        s->meta.curr_msg_off = 0;
+                        s->meta.msg_num = 0;
                         break;
 
                     case BLADERF_FORMAT_SC16_Q11_META:
@@ -585,6 +604,16 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                     s->state = SYNC_STATE_WAIT_FOR_BUFFER;
                 }
 
+                MUTEX_UNLOCK(&b->lock);
+                break;
+
+
+            case SYNC_STATE_USING_BUFFER_PAD: /* SC12Q11 buffers w/o metadata */
+                MUTEX_LOCK(&b->lock);
+                buf_src = (uint8_t*)b->buffers[b->cons_i];
+                // Copies samples in units of messages
+                // TODO: lunch
+                
                 MUTEX_UNLOCK(&b->lock);
                 break;
 
