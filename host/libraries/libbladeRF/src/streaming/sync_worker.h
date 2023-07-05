@@ -74,11 +74,13 @@ struct sync_worker {
  * Create a launch a worker thread. It will enter the IDLE state upon
  * executing.
  *
- * @param   s   Sync handle containing worker to initialize
+ * @param       s           Sync handle containing worker to initialize
+ * @param[in]   buf_size    Size of internal buffers in samples (initializes in
+ *                          terms of 16-bit samples in the 12-bit case)
  *
  * @return 0 on success, BLADERF_ERR_* on failure
  */
-int sync_worker_init(struct bladerf_sync *s);
+int sync_worker_init(struct bladerf_sync *s, size_t buf_size);
 
 /**
  * Shutdown and deinitialize

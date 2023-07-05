@@ -36,6 +36,7 @@ struct stream_config {
 
     unsigned int samples_per_msg;
     unsigned int msg_per_buffer;
+    unsigned int samples_per_buffer;
     unsigned int msg_padding;
     unsigned int num_xfers;
     unsigned int timeout_ms;
