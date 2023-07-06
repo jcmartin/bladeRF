@@ -11,9 +11,13 @@ use std.env.finish;
 entity twelve_bit_packer_tb is
     generic (
         TWO_CHANNEL_EN              : std_logic := '0'; -- metadata only works w/ one channel so far
+        -- due to need to buffer, switching does not work, so this chooses which meta mode to test
+        -- TODO: find a better way to buffer / switch modes
+        TEST_TWELVE_BIT_META        : boolean := false; 
         NUM_TWELVE_BIT_TRIALS       : natural := 500;
         NUM_SIXTEEN_BIT_TRIALS      : natural := 500;
-        NUM_TWELVE_BIT_META_TRIALS  : natural := 127 * 4 -- 676 (num 12-bit samples) * 127 = LCM of 508
+        NUM_TWELVE_BIT_META_TRIALS  : natural := 127 * 4; -- 676 (num 12-bit samples) * 127 = LCM of 508
+        NUM_SIXTEEN_BIT_META_TRIALS : natural := 200
     );
 end entity;
 
@@ -23,6 +27,7 @@ architecture test of twelve_bit_packer_tb is
     constant PAD_SIZE_HS            : natural := 1;
     constant BUF_SIZE_SS            : natural := 510;
     constant PAD_SIZE_SS            : natural := 2;
+    constant BUF_SIZE_SS_SIXTEEN    : natural := 508;
     constant FX3_CLK_HALF_PERIOD    : time := 1 sec * (1.0/100.0e6/2.0);
     constant RX_CLK_HALF_PERIOD     : time := 1 sec * (1.0/122.88e6/2.0); 
 
@@ -297,6 +302,28 @@ begin
             end loop;
         end procedure get_twelve_bit_buf;
 
+        procedure get_sixteen_bit_buf is
+            variable read_count : natural := 0;
+        begin
+            while read_count < buf_size loop
+                if (unsigned(sample_fifo_rused) > 0) then
+                    -- Check current fifo output
+                    assert_eq("sample", curr_count, unsigned(sample_fifo_rdata));
+                    read_count := read_count + 1;
+                    sample_fifo_rreq <= '1';
+                    nop(fx3_clock, 1);
+                    sample_fifo_rreq <= '0';
+    
+                    if ((TWO_CHANNEL_EN = '0') or (two_ch_delay = '1')) then
+                        curr_count := curr_count + 1;
+                    end if;
+                    two_ch_delay := not two_ch_delay;
+                else
+                    nop(fx3_clock, 1);
+                end if;
+            end loop;
+        end procedure get_sixteen_bit_buf;
+
         procedure get_meta is
             variable temp : std_logic_vector(31 downto 0);
         begin
@@ -330,25 +357,49 @@ begin
         buf_size := BUF_SIZE_SS - 3;
         pad_size := PAD_SIZE_SS - 1;
         nop(fx3_clock, 1);
-        
-        -- Get initial timestamp
-        get_meta;
-        curr_ts := next_ts;
-        -- FIFO writer will holdoff the first time metadata is written...?
-        -- So adjust current count (assuming holdoff is very small)
-        -- This has to happen first otherwise the skip is in the middle of buf
-        wait until unsigned(sample_fifo_rused) > 0;
-        temp := unsigned(sample_fifo_rdata(11 downto 0));
-        curr_count := curr_count + (temp - curr_count(11 downto 0));
-        get_twelve_bit_buf;
 
-        for x in 2 to NUM_TWELVE_BIT_META_TRIALS loop
+        if (TEST_TWELVE_BIT_META) then
+            report "Testing 12-bit meta mode";
+            -- Get initial timestamp
             get_meta;
-            assert_eq("timestamp", curr_ts, next_ts - 676);
             curr_ts := next_ts;
+            -- FIFO writer will holdoff the first time metadata is written...?
+            -- So adjust current count (assuming holdoff is very small)
+            -- This has to happen first otherwise the skip is in the middle of buf
+            wait until unsigned(sample_fifo_rused) > 0;
+            temp := unsigned(sample_fifo_rdata(11 downto 0));
+            curr_count := curr_count + (temp - curr_count(11 downto 0));
             get_twelve_bit_buf;
-        end loop;
 
+            for x in 2 to NUM_TWELVE_BIT_META_TRIALS loop
+                get_meta;
+                assert_eq("timestamp", curr_ts, next_ts - 676);
+                curr_ts := next_ts;
+                get_twelve_bit_buf;
+            end loop;
+        else
+            report "Testing 16-bit meta mode";
+            twelve_bit_mode_en <= '0';
+            buf_size := BUF_SIZE_SS_SIXTEEN;
+            sample_fifo_rreq <= '0';
+            nop(fx3_clock, 1);
+
+            get_meta;
+            curr_ts := next_ts;
+            wait until unsigned(sample_fifo_rused) > 0;
+            temp := unsigned(sample_fifo_rdata(11 downto 0));
+            curr_count := curr_count + (temp - curr_count(11 downto 0));
+            get_sixteen_bit_buf;
+
+            for x in 2 to NUM_SIXTEEN_BIT_META_TRIALS loop
+                get_meta;
+                assert_eq("timestamp", curr_ts, next_ts - 508);
+                curr_ts := next_ts;
+                get_sixteen_bit_buf;
+            end loop;
+        end if;
+
+        report "Testing 12-bit non-meta mode";
         buf_size := BUF_SIZE_SS;
         pad_size := PAD_SIZE_SS;
         twelve_bit_mode_en <= '1';
@@ -360,25 +411,13 @@ begin
             get_twelve_bit_buf;
         end loop;
 
+        report "Testing 16-bit non-meta mode";
         twelve_bit_mode_en <= '0';
         sample_fifo_rreq <= '0';
         two_ch_delay := '0';
         nop(fx3_clock, 1);
         for x in 1 to NUM_SIXTEEN_BIT_TRIALS loop
-            if (unsigned(sample_fifo_rused) > 0) then
-                -- Check current fifo output
-                assert_eq("sample", curr_count, unsigned(sample_fifo_rdata));
-                sample_fifo_rreq <= '1';
-                nop(fx3_clock, 1);
-                sample_fifo_rreq <= '0';
-
-                if ((TWO_CHANNEL_EN = '0') or (two_ch_delay = '1')) then
-                    curr_count := curr_count + 1;
-                end if;
-                two_ch_delay := not two_ch_delay;
-            else
-                nop(fx3_clock, 1);
-            end if;
+            get_sixteen_bit_buf;
         end loop;
         
         finish;

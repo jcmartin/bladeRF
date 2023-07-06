@@ -229,6 +229,7 @@ begin
         variable discontinuous : std_logic;
     begin
         meta_future <= meta_current;
+        meta_data_out <= (others => '1');
         meta_empty_out <= '1';
         meta_rreq_out <= '0';
 
@@ -245,6 +246,7 @@ begin
                         meta_future.offset_delta <= 4;
                         meta_future.skip_downcount <= 4;
                     else
+                        meta_future.write_downcount <= 3;
                         meta_future.meta_data <= meta_data_in;
                         meta_future.ret <= IDLE;
                         meta_future.state <= WRITE;
@@ -277,13 +279,13 @@ begin
                     meta_future.prev_meta_data <= meta_data_in;
                     meta_future.prev_discontinuous <= discontinuous;
 
+                    meta_rreq_out <= '1'; -- ack
                     if (meta_current.skip_downcount = 0) then
                         meta_future.state <= READ;
                         meta_future.skip_downcount <= 3;
                         meta_future.offset <= 168 - meta_current.offset_delta;
                         meta_future.offset_delta <= meta_current.offset_delta + 4;
                     else
-                        meta_rreq_out <= '1'; -- ack
                         meta_future.state <= WRITE;
                         meta_future.write_downcount <= 3;
                         meta_future.skip_downcount <= meta_current.skip_downcount - 1;
