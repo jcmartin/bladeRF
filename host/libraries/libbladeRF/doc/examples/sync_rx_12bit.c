@@ -108,12 +108,13 @@ int sync_rx_meta_now_example(struct bladerf *dev,
                              int16_t *samples,
                              unsigned int samples_len,
                              unsigned int rx_count,
-                             unsigned int timeout_ms)
+                             unsigned int timeout_ms,
+                             bladerf_format format)
 {
     int status = 0;
     struct bladerf_metadata meta;
-    uint8_t* samples_bytes = (uint8_t*) samples;
-    unsigned int i, rd;
+    unsigned int i;
+    int16_t curr_i, curr_q;
     FILE* fd = fopen("output.bin", "wb");
     if (!fd) {
         fprintf(stderr, "Failed to open output file!");
@@ -142,13 +143,32 @@ int sync_rx_meta_now_example(struct bladerf *dev,
 
         }
 
-        rd = fwrite(samples_bytes, 3, samples_len, fd);
+        if (format == BLADERF_FORMAT_SC12_Q11 || format == BLADERF_FORMAT_SC12_Q11_META)
+            bladerf_align_12_bit_buffer(samples_len, samples);
 
-        for (size_t j = 0; j < samples_len-1; j++) {
-            if(samples_bytes[3*j] + 1 != samples_bytes[3*(j+1)])
-                printf("Disc from %x to %x\n", samples_bytes[3*j], samples_bytes[3*(j+1)]);
+        curr_i = samples[0];
+        curr_q = samples[1];
+
+        for (size_t j = 1; j < samples_len-1; j++) {
+            // 12-bit counters go from -2047 to 2047 for some reason...
+            // Maybe intention was a sign bit and not twos compliment but
+            // there is only one 0
+            // hdl/fpga/ip/nuand/synthesis/signal_generator.vhd
+            if (++curr_i == 2048)
+                curr_i = -2047;
+            if (--curr_q == -2048)
+                curr_q = 2047;
+
+            if (curr_i != samples[2*j]) {
+                printf("Unexpected i, expected %x got %x\n", curr_i, samples[2*j]);
+                curr_i = samples[2*j];
+            }
+
+            if (curr_q != samples[2*j+1]) {
+                printf("Unexpected q, expected %x got %x\n", curr_q, samples[2*j+1]);
+                curr_q = samples[2*j+1];
+            }
         }
-        printf("Wrote %u 3-byte samples to file\n", rd);
     }
     fclose(fd);
     return status;
@@ -157,7 +177,7 @@ int sync_rx_meta_now_example(struct bladerf *dev,
 
 static struct option const long_options[] = {
     { "device", required_argument, NULL, 'd' },
-    { "bitmode", required_argument, NULL, 'b' },
+    { "mode", required_argument, NULL, 'm' },
     { "rxcount", required_argument, NULL, 'c' },
     { "verbosity", required_argument, 0, 'v' },
     { "help", no_argument, NULL, 'h' },
@@ -168,9 +188,13 @@ static void usage(const char *argv0)
 {
     printf("Usage: %s [options]\n", argv0);
     printf("  -d, --device <str>        Specify device to open.\n");
-    printf("  -b, --bitmode <mode>      Specify 16bit or 8bit mode\n");
-    printf("                              <16bit|16> (default)\n");
-    printf("                              <8bit|8>\n");
+    printf("  -m, --mode <mode>         Specify mode\n");
+    printf("                              <12m> (default, 12-bit meta)\n");
+    printf("                              <12> (12-bit)\n");
+    printf("                              <16m> (16-bit meta)\n");
+    printf("                              <16> (16-bit)\n");
+    printf("                              <8m> (8-bit meta)\n");
+    printf("                              <8> (8-bit)\n");
     printf("  -c, --rxcount <int>       Specify # of RX streams\n");
     printf("  -v, --verbosity <level>   Set test verbosity\n");
     printf("  -h, --help                Show this text.\n");
@@ -182,7 +206,7 @@ int main(int argc, char *argv[])
     struct bladerf *dev = NULL;
     const char *devstr  = NULL;
     int16_t *samples    = NULL;
-    bladerf_format fmt  = BLADERF_FORMAT_SC12_Q11;
+    bladerf_format fmt  = BLADERF_FORMAT_SC12_Q11_META;
 
     const unsigned int num_samples = 4096;
     unsigned int rx_count    = 15;
@@ -195,7 +219,7 @@ int main(int argc, char *argv[])
     int opt = 0;
     int opt_ind = 0;
     while (opt != -1) {
-        opt = getopt_long(argc, argv, "d:c:v:h", long_options, &opt_ind);
+        opt = getopt_long(argc, argv, "d:c:m:v:h", long_options, &opt_ind);
 
         switch (opt) {
             case 'd':
@@ -206,6 +230,25 @@ int main(int argc, char *argv[])
                 rx_count = str2int(optarg, 1, INT_MAX, &ok);
                 if (!ok) {
                     printf("RX count not valid: %s\n", optarg);
+                    return -1;
+                }
+                break;
+
+            case 'm':
+                if (strcmp(optarg, "16") == 0) {
+                    fmt = BLADERF_FORMAT_SC16_Q11;
+                } else if (strcmp(optarg, "16m") == 0) {
+                    fmt = BLADERF_FORMAT_SC16_Q11_META;
+                } else if (strcmp(optarg, "12") == 0) {
+                    fmt = BLADERF_FORMAT_SC12_Q11;
+                } else if (strcmp(optarg, "12m") == 0) {
+                    fmt = BLADERF_FORMAT_SC12_Q11_META;
+                } else if (strcmp(optarg, "8") == 0) {
+                    fmt = BLADERF_FORMAT_SC8_Q7;
+                } else if (strcmp(optarg, "8m") == 0) {
+                    fmt = BLADERF_FORMAT_SC8_Q7_META;
+                } else {
+                    printf("Unknown bitmode: %s\n", optarg);
                     return -1;
                 }
                 break;
@@ -230,17 +273,15 @@ int main(int argc, char *argv[])
     }
 
     dev = example_init(devstr);
-    printf("Format: ");
-    printf("SC12_Q11_META\n");
     printf("RX Count: %i\n", rx_count);
-    bladerf_set_rx_mux(dev, BLADERF_RX_MUX_32BIT_COUNTER);
+    bladerf_set_rx_mux(dev, BLADERF_RX_MUX_12BIT_COUNTER);
 
     if (dev) {
         samples = init(dev, num_samples, fmt);
         if (samples != NULL) {
             printf("\nRunning RX meta \"now\" example...\n");
             status = sync_rx_meta_now_example(dev, samples, num_samples,
-                                              rx_count, timeout_ms);
+                                              rx_count, timeout_ms, fmt);
         }
 
         deinit(dev, samples);

@@ -242,7 +242,7 @@ int sync_init(struct bladerf_sync *sync,
     sync->stream_config.msg_padding = msg_padding;
     sync->stream_config.samples_per_msg = samples_per_msg(msg_size, bytes_per_sample, msg_padding);
     sync->stream_config.msg_per_buffer = msg_per_buf(msg_size, buffer_size_bytes);
-    sync->stream_config.samples_per_buffer = sync->stream_config.samples_per_msg * sync->stream_config.samples_per_buffer;
+    sync->stream_config.samples_per_buffer = sync->stream_config.samples_per_msg * sync->stream_config.msg_per_buffer;
     sync->stream_config.num_xfers = num_transfers;
     sync->stream_config.timeout_ms = stream_timeout;
     sync->stream_config.bytes_per_sample = bytes_per_sample;
