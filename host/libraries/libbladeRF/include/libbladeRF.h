@@ -2346,12 +2346,20 @@ typedef enum {
  */
 
 /**
- * A sample overrun has occurred.
+ * Host detects a sample overrun has occurred.
  *
  * This indicates that either the host (more likely) or the FPGA is not keeping
  * up with the incoming samples.
  */
-#define BLADERF_META_STATUS_OVERRUN (1 << 0)
+#define BLADERF_META_STATUS_OVERRUN (1 << 1)
+#define BLADERF_META_STATUS_SW_OVERRUN (1 << 1)
+
+/**
+ * The FPGA detects a discontinuity in metadata time stamps.
+ * 
+ * This is currently only implimented for the 12-bit mode.
+ */
+#define BLADERF_META_STATUS_HW_OVERRUN (1 << 15)
 
 /**
  * A sample underrun has occurred.
@@ -2456,6 +2464,11 @@ typedef enum {
  * underflow is detected in the sample buffering system on the device.
  */
 #define BLADERF_META_FLAG_RX_HW_UNDERFLOW (1 << 0)
+
+/**
+ * This flag is asserted if the HW detects an RX overrun in 12-bit mode
+ */
+#define BLADERF_META_FLAG_RX_HW_OVERRUN (1 << 15)
 
 /**
  * This flag is asserted in bladerf_metadata.status by the hardware if mini

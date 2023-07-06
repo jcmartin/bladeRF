@@ -627,10 +627,6 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                 samples_to_copy = uint_min(num_samples - samples_returned,
                                           left_in_msg(s));
 
-                log_verbose("%u s/msg, %u msg offset\n",
-                            s->stream_config.samples_per_msg,
-                            s->meta.curr_msg_off);
-
                 memcpy(samples_dest + samples2bytes(s, samples_returned),
                        s->meta.curr_msg +
                            samples2bytes(s, s->meta.curr_msg_off),
@@ -684,7 +680,8 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                         user_meta->status |= s->meta.msg_flags &
                            (BLADERF_META_FLAG_RX_HW_UNDERFLOW |
                               BLADERF_META_FLAG_RX_HW_MINIEXP1 |
-                              BLADERF_META_FLAG_RX_HW_MINIEXP2);
+                              BLADERF_META_FLAG_RX_HW_MINIEXP2 |
+                              BLADERF_META_FLAG_RX_HW_OVERRUN);
 
                         s->meta.curr_msg_off = 0;
 
@@ -693,7 +690,7 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                         if (copied_data &&
                             s->meta.msg_timestamp != s->meta.curr_timestamp) {
 
-                            user_meta->status |= BLADERF_META_STATUS_OVERRUN;
+                            user_meta->status |= BLADERF_META_STATUS_SW_OVERRUN;
                             exit_early = true;
                             log_debug("Sample discontinuity detected @ "
                                       "buffer %u, message %u: Expected t=%llu, "

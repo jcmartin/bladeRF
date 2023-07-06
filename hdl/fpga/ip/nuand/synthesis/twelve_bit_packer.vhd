@@ -278,11 +278,11 @@ begin
                     meta_future.state <= FILL_BUF;
                 elsif (meta_empty_in = '0') then
 
-                    -- TODO: pick a bit to store discontinuous
                     meta_future.out_data <=
                         meta_current.curr_data(127 downto 96) &
-                        std_logic_vector(out_timestamp) & x"1234432" & "000" &
-                        (meta_current.prev_discontinuous or discontinuous);
+                        std_logic_vector(out_timestamp) & 
+                        (meta_current.prev_discontinuous or discontinuous) & "000" &
+                        x"2344321";
                     
                     meta_future.curr_data <= meta_current.next_data;
                     meta_future.next_data <= meta_data_in;
