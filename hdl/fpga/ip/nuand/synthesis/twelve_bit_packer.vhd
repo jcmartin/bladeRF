@@ -46,7 +46,7 @@ architecture arch of twelve_bit_packer is
     constant GPIF_BUF_SIZE_SS       :   natural := 510; -- Two cycles of padding
     
     type state_t is (START, PASS_0, PASS_1, PACK_0, PACK_1, PACK_2, PAD);
-    type meta_state_t is (IDLE, READ, WRITE);
+    type meta_state_t is (IDLE, FILL_BUF, READ, WRITE);
 
     -- FIFOs are in "Show-Ahead" mode, meaning rreq acts like an acknowledge
     type fsm_t is record
@@ -62,13 +62,13 @@ architecture arch of twelve_bit_packer is
     type meta_fsm_t is record
         state               : meta_state_t;
         ret                 : meta_state_t;
-        timestamp           : unsigned(63 downto 0);
         offset              : integer range 0 to 672;
         offset_delta        : integer range 0 to 168;
         skip_downcount      : integer range 0 to 4;
         write_downcount     : integer range 0 to 3;
-        meta_data           : std_logic_vector(127 downto 0);
-        prev_meta_data      : std_logic_vector(127 downto 0);
+        out_data            : std_logic_vector(127 downto 0);
+        curr_data           : std_logic_vector(127 downto 0);
+        next_data           : std_logic_vector(127 downto 0);
         prev_discontinuous  : std_logic;
     
     end record;
@@ -87,13 +87,13 @@ architecture arch of twelve_bit_packer is
     constant META_FSM_RESET_VALUE : meta_fsm_t := (
         state               => IDLE,
         ret                 => IDLE,
-        timestamp           => (others => '0'),
         offset              => 0,
         offset_delta        => 0,
         skip_downcount      => 0,
         write_downcount     => 0,
-        meta_data           => (others => '0'),
-        prev_meta_data      => (others => '0'),
+        out_data            => (others => '0'),
+        curr_data           => (others => '0'),
+        next_data           => (others => '0'),
         prev_discontinuous  => '0'
     );
 
@@ -226,57 +226,66 @@ begin
     -- TODO: generalize to SS 2 ch and HS 1 + 2 ch
     -- TODO: be able to reset / change modes
     meta_fsm_comb : process(all)
-        variable discontinuous : std_logic;
+        variable discontinuous  : std_logic;
+        variable prev_timestamp : unsigned(63 downto 0);
+        variable out_timestamp : unsigned(63 downto 0);
     begin
         meta_future <= meta_current;
         meta_data_out <= (others => '1');
         meta_empty_out <= '1';
         meta_rreq_out <= '0';
 
+        out_timestamp := unsigned(meta_current.curr_data(95 downto 32)) + meta_current.offset;
+        prev_timestamp := unsigned(meta_current.next_data(95 downto 32));
+        if (timestamp_in - prev_timestamp /= 508) then
+            discontinuous := '1';
+        else
+            discontinuous := '0';
+        end if;
+
         case (meta_current.state) is
             when IDLE =>
                 if (meta_empty_in = '0') then
+                    meta_rreq_out <= '1';
                     if (twelve_bit_mode_en = '1') then
-                        meta_future.prev_meta_data <= meta_data_in;
-                        meta_future.timestamp <= timestamp_in;
+                        meta_future.next_data <= meta_data_in;
                         meta_rreq_out <= '1';
-                        meta_future.state <= READ;
-                        meta_future.ret <= READ;
-                        meta_future.offset <= 0;
-                        meta_future.offset_delta <= 4;
-                        meta_future.skip_downcount <= 4;
+                        meta_future.state <= FILL_BUF;
                     else
                         meta_future.write_downcount <= 3;
-                        meta_future.meta_data <= meta_data_in;
+                        meta_future.out_data <= meta_data_in;
                         meta_future.ret <= IDLE;
                         meta_future.state <= WRITE;
                     end if;
                 end if;
 
+            when FILL_BUF =>
+                if (meta_empty_in = '0') then
+                    meta_future.curr_data <= meta_current.next_data;
+                    meta_future.next_data <= meta_data_in;
+                    meta_future.prev_discontinuous <= discontinuous;
+
+                    meta_future.state <= READ;
+                    meta_future.ret <= READ;
+                    meta_future.offset <= 0;
+                    meta_future.offset_delta <= 4;
+                    meta_future.skip_downcount <= 4;
+                end if;
+
             when READ =>
                 if (meta_current.skip_downcount = 0 and meta_current.offset_delta = 168) then
-                    -- TODO: figure out a way to pass on discontinuity info 
-                    meta_future.state <= IDLE;
+                    -- TODO: change modes
+                    meta_future.state <= FILL_BUF;
                 elsif (meta_empty_in = '0') then
-                    -- TODO: this should be double buffered to check two metas
-                    -- in the future and determine discontinuity over entire region
-                    if (timestamp_in - meta_current.timestamp /= 508) then
-                        discontinuous := '1';
-                    else
-                        discontinuous := '0';
-                    end if;
 
-                    if (meta_current.skip_downcount = 3) then
-                        discontinuous := meta_current.prev_discontinuous or discontinuous;
-                    end if;
+                    -- TODO: pick a bit to store discontinuous
+                    meta_future.out_data <=
+                        meta_current.curr_data(127 downto 96) &
+                        std_logic_vector(out_timestamp) & x"1234432" & "000" &
+                        (meta_current.prev_discontinuous or discontinuous);
                     
-                    -- TODO: pick a bit to store discontinous
-                    meta_future.meta_data <= 
-                        meta_current.prev_meta_data(127 downto 96) &
-                        std_logic_vector(meta_current.timestamp + meta_current.offset) & x"12344321";
-
-                    meta_future.timestamp <= timestamp_in;
-                    meta_future.prev_meta_data <= meta_data_in;
+                    meta_future.curr_data <= meta_current.next_data;
+                    meta_future.next_data <= meta_data_in;
                     meta_future.prev_discontinuous <= discontinuous;
 
                     meta_rreq_out <= '1'; -- ack
@@ -296,13 +305,13 @@ begin
 
             when WRITE =>
                 meta_empty_out <= '0';
-                meta_data_out <= meta_current.meta_data(31 downto 0);
+                meta_data_out <= meta_current.out_data(31 downto 0);
 
                 if (meta_rreq_in = '1') then 
                     if (meta_current.write_downcount = 0) then
                         meta_future.state <= meta_current.ret;
                     else
-                        meta_future.meta_data <= x"00000000" & meta_current.meta_data(127 downto 32);
+                        meta_future.out_data <= x"00000000" & meta_current.out_data(127 downto 32);
                         meta_future.write_downcount <= meta_current.write_downcount - 1;
                     end if;
                 end if;
