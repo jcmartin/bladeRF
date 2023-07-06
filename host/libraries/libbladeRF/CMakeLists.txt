@@ -346,6 +346,7 @@ set(LIBBLADERF_SOURCE
         src/helpers/version.c
         src/helpers/wallclock.c
         src/helpers/interleave.c
+        src/helpers/align.c
         src/helpers/configfile.c
         src/version.h
         src/devinfo.c

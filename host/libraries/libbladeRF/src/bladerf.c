@@ -49,6 +49,7 @@
 #include "helpers/file.h"
 #include "helpers/have_cap.h"
 #include "helpers/interleave.h"
+#include "helpers/align.h"
 
 
 /******************************************************************************/
@@ -1130,6 +1131,17 @@ int bladerf_deinterleave_stream_buffer(bladerf_channel_layout layout,
                                        void *samples)
 {
     return _interleave_deinterleave_buf(layout, format, buffer_size, samples);
+}
+
+int bladerf_align_12_bit_buffer(unsigned int buffer_size, void *samples)
+{
+    return _align_12bit(samples, buffer_size);
+}
+
+int bladerf_align_and_deinterleave_12_bit_buffer(unsigned int buffer_size,
+                                                 void *samples)
+{
+    return _align_and_deinterleave_12bit(samples, buffer_size);
 }
 
 /******************************************************************************/

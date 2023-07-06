@@ -2169,12 +2169,11 @@ typedef enum {
      * 
      * Currently only RX for this mode is supported.
      * 
-     * When using bladerf_sync_rx(), the 12 bit samples will be unpacked and 
-     * byte aligned into a buffer identical to BLADERF_FORMAT_SC16_Q11
+     * When using bladerf_sync_rx(), the 12 bit samples will be copied and any
+     * additional padding will be skipped. In order to obtain a buffer identical
+     * to BLADERF_FORMAT_SC16_Q11, call bladerf_align_12_bit_buffer() or
+     * bladerf_align_and_deinterleave_12_bit_buffer().
      * 
-     * Note: bladerf_deinterleave_stream_buffer() / 
-     * bladerf_interleave_stream_buffer() should only be called with byte 
-     * aligned buffers
      */
     BLADERF_FORMAT_SC12_Q11,
 
@@ -2185,12 +2184,11 @@ typedef enum {
      * 
      * Currently only RX for this mode is supported.
      * 
-     * When using bladerf_sync_rx(), the 12 bit samples will be unpacked and 
-     * byte aligned into a buffer identical to BLADERF_FORMAT_SC16_Q11
+     * When using bladerf_sync_rx(), the 12 bit samples will be copied and any
+     * additional padding will be skipped. In order to obtain a buffer identical
+     * to BLADERF_FORMAT_SC16_Q11, call bladerf_align_12_bit_buffer() or
+     * bladerf_align_and_deinterleave_12_bit_buffer().
      * 
-     * Note: bladerf_deinterleave_stream_buffer() / 
-     * bladerf_interleave_stream_buffer() should only be called with byte 
-     * aligned buffers
      */
     BLADERF_FORMAT_SC12_Q11_META,
 
@@ -2609,6 +2607,62 @@ int CALL_CONV bladerf_deinterleave_stream_buffer(bladerf_channel_layout layout,
                                                  bladerf_format format,
                                                  unsigned int buffer_size,
                                                  void *samples);
+
+
+/**
+ * Aligns and sign-extends a packed 12-bit sample buffer into 16-bit samples.
+ * 
+ * This function takes a buffer created by bladerf_sync_rx() in either the
+ * ::BLADERF_FORMAT_SC12_Q11 or ::BLADERF_FORMAT_SC12_Q11_META formats and
+ * unpacks the samples into sign-extended 16-bit samples.
+ * 
+ * Note: The given buffer must be large enough to hold the inflated samples.
+ * 
+ * Note: When using the \ref FN_STREAMING_ASYNC interface the user must ensure
+ * metadata and padding is removed.
+ * 
+ * @param   buffer_size     The size of the buffer, in samples. Note that
+ *                          this is the entire buffer, not just a single
+ *                          channel.
+ * @param   samples         Buffer to process. The user is responsible for
+ *                          ensuring this buffer contains exactly
+ *                          `buffer_size` 12-bit (3 byte) samples and enough 
+ *                          room for `buffer_size` 16-bit (4 byte) samples.
+ *
+ * @return 0 on success, value from \ref RETCODES list on failure 
+ */
+API_EXPORT
+int CALL_CONV bladerf_align_12_bit_buffer(unsigned int buffer_size,
+                                          void *samples);
+
+/**
+ * Aligns and sign-extends a packed 12-bit sample buffer into 16-bit samples, 
+ * deinterleaving MIMO RX as well.
+ * 
+ * This function takes a two channel buffer created by bladerf_sync_rx() in 
+ * either the ::BLADERF_FORMAT_SC12_Q11 or ::BLADERF_FORMAT_SC12_Q11_META 
+ * formats and unpacks the samples into sign-extended 16-bit samples, 
+ * deinterleaving a 2-channel interleaved buffer similar to 
+ * bladerf_deinterleave_stream_buffer()
+ * 
+ * Note: The given buffer must be large enough to hold the inflated samples
+ * 
+ * Note: When using the \ref FN_STREAMING_ASYNC interface the user must ensure
+ * metadata and padding is removed.
+ * 
+ * @param   buffer_size     The size of the buffer, in samples. Note that
+ *                          this is the entire buffer, not just a single
+ *                          channel.
+ * @param   samples         Buffer to process. The user is responsible for
+ *                          ensuring this buffer contains exactly
+ *                          `buffer_size` 12-bit (3 byte) samples and enough 
+ *                          room for `buffer_size` 16-bit (4 byte) samples.
+ *
+ * @return 0 on success, value from \ref RETCODES list on failure 
+ */
+API_EXPORT
+int CALL_CONV bladerf_align_and_deinterleave_12_bit_buffer(
+    unsigned int buffer_size, void *samples);
 
 /** @} (End of STREAMING_FORMAT) */
 
