@@ -113,13 +113,14 @@ int sync_rx_meta_now_example(struct bladerf *dev,
 {
     int status = 0;
     struct bladerf_metadata meta;
-    unsigned int i;
+    unsigned int i, n, n_hw_overruns, n_sw_overruns, n_non_contiguous;
+    bool is_contiguous;
     int16_t curr_i, curr_q;
-    FILE* fd = fopen("output.bin", "wb");
-    if (!fd) {
-        fprintf(stderr, "Failed to open output file!");
-        return -1;
-    }
+
+    n = 0;
+    n_hw_overruns = 0;
+    n_sw_overruns = 0;
+    n_non_contiguous = 0;
 
     /* Perform a read immediately, and have the bladerf_sync_rx function
      * provide the timestamp of the read samples */
@@ -128,17 +129,20 @@ int sync_rx_meta_now_example(struct bladerf *dev,
 
     /* Receive samples and do work on them */
     for (i = 0; i < rx_count && status == 0; i++) {
+        is_contiguous = true;
         status = bladerf_sync_rx(dev, samples, samples_len, &meta, timeout_ms);
         if (status != 0) {
             fprintf(stderr, "RX \"now\" failed: %s\n\n",
                     bladerf_strerror(status));
-        } else if (meta.status & BLADERF_META_STATUS_OVERRUN) {
-            fprintf(stderr, "Overrun detected. %u valid samples were read.\n",
+        } else if (meta.status & BLADERF_META_STATUS_HW_OVERRUN) {
+            n_hw_overruns++;
+            fprintf(stderr, "Overrun detected in FPGA. %u valid samples were read.\n",
+                    meta.actual_count);
+        } else if (meta.status & BLADERF_META_STATUS_SW_OVERRUN) {
+            n_sw_overruns++;
+            fprintf(stderr, "Overrun detected in host. %u valid samples read\n",
                     meta.actual_count);
         } else {
-            printf("RX'd %u samples at t=0x%016" PRIx64 "\n", meta.actual_count,
-                   meta.timestamp);
-
             fflush(stdout);
 
         }
@@ -149,7 +153,7 @@ int sync_rx_meta_now_example(struct bladerf *dev,
         curr_i = samples[0];
         curr_q = samples[1];
 
-        for (size_t j = 1; j < samples_len-1; j++) {
+        for (size_t j = 1; j < meta.actual_count-1; j++) {
             // 12-bit counters go from -2047 to 2047 for some reason...
             // Maybe intention was a sign bit and not twos compliment but
             // there is only one 0
@@ -161,16 +165,25 @@ int sync_rx_meta_now_example(struct bladerf *dev,
 
             if (curr_i != samples[2*j]) {
                 printf("Unexpected i, expected %x got %x\n", curr_i, samples[2*j]);
+                is_contiguous = false;
                 curr_i = samples[2*j];
             }
 
             if (curr_q != samples[2*j+1]) {
                 printf("Unexpected q, expected %x got %x\n", curr_q, samples[2*j+1]);
+                is_contiguous = false;
                 curr_q = samples[2*j+1];
             }
         }
+        if (!is_contiguous)
+            n_non_contiguous++;
+        
+        n++;
     }
-    fclose(fd);
+
+    printf("Total: %u\nDisc: %u\nHW overruns: %u\nSW overruns %u",
+            n, n_non_contiguous, n_hw_overruns, n_sw_overruns);
+
     return status;
 }
 /** [rx_meta_now_example] */
@@ -272,20 +285,61 @@ int main(int argc, char *argv[])
         }
     }
 
-    dev = example_init(devstr);
+    status = bladerf_open(&dev, devstr);
+    if (status != 0) {
+        fprintf(stderr, "Failed to open device: %s\n",
+                bladerf_strerror(status));
+        bladerf_close(dev);
+        return status;
+    }
+
+    status = bladerf_set_frequency(dev, BLADERF_CHANNEL_RX(0), EXAMPLE_RX_FREQ);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set RX frequency: %s\n",
+                bladerf_strerror(status));
+        bladerf_close(dev);
+        return status;
+    } else {
+        printf("RX frequency: %u Hz\n", EXAMPLE_RX_FREQ);
+    }
+    
+    bladerf_sample_rate sr;
+    status = bladerf_enable_feature(dev, BLADERF_FEATURE_OVERSAMPLE, true);
+    status = bladerf_set_sample_rate(dev, BLADERF_CHANNEL_RX(0),
+                                     122880000, &sr);
+
+    // status = bladerf_set_sample_rate(dev, BLADERF_CHANNEL_RX(0),
+                                    //  EXAMPLE_SAMPLERATE, &sr);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set RX sample rate: %s\n",
+                bladerf_strerror(status));
+        bladerf_close(dev);
+        return status;
+    } else {
+        printf("RX samplerate: %u sps\n", sr);
+    }
+
+    status = bladerf_set_bandwidth(dev, BLADERF_CHANNEL_RX(0),
+                                   EXAMPLE_BANDWIDTH, NULL);
+    if (status != 0) {
+        fprintf(stderr, "Failed to set RX bandwidth: %s\n",
+                bladerf_strerror(status));
+        bladerf_close(dev);
+        return status;
+    } else {
+        printf("RX bandwidth: %u Hz\n", EXAMPLE_BANDWIDTH);
+    }
+
     printf("RX Count: %i\n", rx_count);
     bladerf_set_rx_mux(dev, BLADERF_RX_MUX_12BIT_COUNTER);
-
-    if (dev) {
-        samples = init(dev, num_samples, fmt);
-        if (samples != NULL) {
-            printf("\nRunning RX meta \"now\" example...\n");
-            status = sync_rx_meta_now_example(dev, samples, num_samples,
-                                              rx_count, timeout_ms, fmt);
-        }
-
-        deinit(dev, samples);
+    samples = init(dev, num_samples, fmt);
+    if (samples != NULL) {
+        printf("\nRunning RX meta \"now\" example...\n");
+        status = sync_rx_meta_now_example(dev, samples, num_samples,
+                                          rx_count, timeout_ms, fmt);
     }
+
+    deinit(dev, samples);
 
     return status;
 }

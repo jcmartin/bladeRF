@@ -685,10 +685,42 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
 
                         s->meta.curr_msg_off = 0;
 
-                        /* We've encountered a discontinuity and need to return
-                         * what we have so far, setting the status flags */
-                        if (copied_data &&
+                        if (s->meta.msg_flags &
+                            BLADERF_META_FLAG_RX_HW_OVERRUN) {
+                            /* Current message contains a discontinuity within
+                             * it and is not valid so skip, seeking to the first
+                             * valid message if nothing copied yet, otherwise
+                             * returning early */
+                            // TODO: this is true only for 12-bit mode
+
+                            log_debug(
+                                "FPGA detected invalid message @ buffer "
+                                "%u, message %u, t=%llu, skipping...\n",
+                                b->cons_i, s->meta.msg_num,
+                                (unsigned long long)s->meta.msg_timestamp);
+
+                            s->meta.msg_num++;
+                            s->meta.state = SYNC_META_STATE_HEADER;
+
+                            if (s->meta.msg_num >= s->meta.msg_per_buf) {
+                                assert(s->meta.msg_num == s->meta.msg_per_buf);
+                                advance_rx_buffer(b);
+                                s->meta.msg_num = 0;
+                                s->state        = SYNC_STATE_WAIT_FOR_BUFFER;
+                            }
+
+                            if (copied_data)
+                                exit_early = true;
+                            else
+                                user_meta->status = 0;
+
+                            break;
+
+                        } else if (copied_data &&
                             s->meta.msg_timestamp != s->meta.curr_timestamp) {
+                            /* We've encountered a discontinuity and need to
+                             * return what we have so far, setting the status
+                             * flags */
 
                             user_meta->status |= BLADERF_META_STATUS_SW_OVERRUN;
                             exit_early = true;
