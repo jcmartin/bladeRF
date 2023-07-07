@@ -313,7 +313,7 @@ begin
                     if (current.meta_downcount = 0) then
                         -- this overrites 15 LBSs in the flags field stored in fifo_writer
                         gpif_out    <= rx_meta_fifo_data(31 downto 15) & "000" &
-                            x"000" & "00" & (not underrun) & underrun;
+                            x"00" & "00" & (not underrun) & underrun;
                     else
                         gpif_out    <= rx_meta_fifo_data;
                     end if;

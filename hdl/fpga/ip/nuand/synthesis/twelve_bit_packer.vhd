@@ -261,6 +261,7 @@ begin
 
             when FILL_BUF =>
                 if (meta_empty_in = '0') then
+                    meta_rreq_out <= '1';
                     meta_future.curr_data <= meta_current.next_data;
                     meta_future.next_data <= meta_data_in;
                     meta_future.prev_discontinuous <= discontinuous;
@@ -278,11 +279,13 @@ begin
                     meta_future.state <= FILL_BUF;
                 elsif (meta_empty_in = '0') then
 
+                    -- Flags are the most signifigant bits, discontinuous is bit 15
                     meta_future.out_data <=
-                        meta_current.curr_data(127 downto 96) &
+                        meta_current.curr_data(127 downto 112) &
+                        (meta_current.prev_discontinuous or discontinuous) &
+                        meta_current.curr_data(110 downto 96) &
                         std_logic_vector(out_timestamp) & 
-                        (meta_current.prev_discontinuous or discontinuous) & "000" &
-                        x"2344321";
+                        x"12344321";
                     
                     meta_future.curr_data <= meta_current.next_data;
                     meta_future.next_data <= meta_data_in;

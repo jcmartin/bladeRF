@@ -16,7 +16,7 @@ entity twelve_bit_packer_tb is
         TEST_TWELVE_BIT_META        : boolean := true; 
         NUM_TWELVE_BIT_TRIALS       : natural := 500;
         NUM_SIXTEEN_BIT_TRIALS      : natural := 500;
-        NUM_TWELVE_BIT_META_TRIALS  : natural := 127 * 4; -- 676 (num 12-bit samples) * 127 = LCM of 508
+        NUM_TWELVE_BIT_META_TRIALS  : natural := 127 * 8; -- 676 (num 12-bit samples) * 127 = LCM of 508
         NUM_SIXTEEN_BIT_META_TRIALS : natural := 200
     );
 end entity;
