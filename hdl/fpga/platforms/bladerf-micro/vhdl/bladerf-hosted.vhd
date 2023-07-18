@@ -100,6 +100,8 @@ architecture hosted_bladerf of bladerf is
     signal eightbit_en_rx         : std_logic;
 
     signal twelvebit_en_pclk      : std_logic;
+    signal dual_channel_en_pclk   : std_logic;
+    signal dual_channel_en_rx     : std_logic;
 
     signal packet_en_pclk         : std_logic;
     signal packet_en_tx           : std_logic;
@@ -280,9 +282,11 @@ begin
         )
         port map (
             clock               =>  fx3_pclk_pll,
-            reset               =>  sys_reset_pclk,
+            reset               =>  sys_reset_pclk or not rx_enable_pclk,
 
             twelve_bit_mode_en  => twelvebit_en_pclk,
+            eight_bit_mode_en   => eightbit_en_pclk,
+            dual_channel_en     => dual_channel_en_pclk,
             meta_en             => meta_en_pclk,
             usb_speed           => usb_speed_pclk,
 
@@ -894,6 +898,19 @@ begin
             clock               =>  fx3_pclk_pll,
             async               =>  nios_gpio.o.twelvebit_en,
             sync                =>  twelvebit_en_pclk
+        );
+
+
+    dual_channel_en_rx <= '1' when count_enabled_channels(adc_controls) = 2 else '0';
+    U_sync_dual_channel_en_pclk : entity work.synchronizer
+        generic map (
+            RESET_LEVEL         => '0'
+        )
+        port map (
+            reset               => '0',
+            clock               => fx3_pclk_pll,
+            async               => dual_channel_en_rx,
+            sync                => dual_channel_en_pclk
         );
 
     U_sync_packet_en_pclk : entity work.synchronizer

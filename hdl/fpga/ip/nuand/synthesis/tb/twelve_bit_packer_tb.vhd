@@ -6,8 +6,6 @@ library work;
     use work.bladerf_p.all;
     use work.fifo_readwrite_p.all;
     
-use std.env.finish;
-
 entity twelve_bit_packer_tb is
     generic (
         TWO_CHANNEL_EN              : std_logic := '0'; -- metadata only works w/ one channel so far
@@ -93,6 +91,8 @@ begin
         reset               =>  reset,
 
         twelve_bit_mode_en  => twelve_bit_mode_en,
+        eight_bit_mode_en   => '0',
+        dual_channel_en     => TWO_CHANNEL_EN,
         meta_en             => meta_en,
         usb_speed           => '0',
 
@@ -420,7 +420,7 @@ begin
             get_sixteen_bit_buf;
         end loop;
         
-        finish;
+        report "--- End of Simulation ---" severity failure ;
 
     end process verify;
 

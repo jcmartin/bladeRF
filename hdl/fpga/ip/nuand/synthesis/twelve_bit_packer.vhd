@@ -12,6 +12,8 @@ entity twelve_bit_packer is
         clock               : in std_logic;
         reset               : in std_logic;
         twelve_bit_mode_en  : in std_logic;
+        eight_bit_mode_en   : in std_logic;
+        dual_channel_en     : in std_logic;
         meta_en             : in std_logic;
         usb_speed           : in std_logic;
 
@@ -46,7 +48,7 @@ architecture arch of twelve_bit_packer is
     constant GPIF_BUF_SIZE_SS       :   natural := 510; -- Two cycles of padding
     
     type state_t is (START, PASS_0, PASS_1, PACK_0, PACK_1, PACK_2, PAD);
-    type meta_state_t is (IDLE, FILL_BUF, READ, WRITE);
+    type meta_state_t is (IDLE, START_16, START_12, READ, WRITE);
 
     -- FIFOs are in "Show-Ahead" mode, meaning rreq acts like an acknowledge
     type fsm_t is record
@@ -62,6 +64,7 @@ architecture arch of twelve_bit_packer is
     type meta_fsm_t is record
         state               : meta_state_t;
         ret                 : meta_state_t;
+        expected_delta      : integer range 127 to 1016;
         offset              : integer range 0 to 672;
         offset_delta        : integer range 0 to 168;
         skip_downcount      : integer range 0 to 4;
@@ -87,6 +90,7 @@ architecture arch of twelve_bit_packer is
     constant META_FSM_RESET_VALUE : meta_fsm_t := (
         state               => IDLE,
         ret                 => IDLE,
+        expected_delta      => 508,
         offset              => 0,
         offset_delta        => 0,
         skip_downcount      => 0,
@@ -100,6 +104,7 @@ architecture arch of twelve_bit_packer is
     signal current, future : fsm_t := FSM_RESET_VALUE;
     signal i0, q0, i1, q1  : std_logic_vector(11 downto 0);
     signal gpif_buf_size   : natural range GPIF_BUF_SIZE_HS to GPIF_BUF_SIZE_SS := GPIF_BUF_SIZE_SS;
+    signal expected_delta  : integer range 127 to 1016;
     signal padding_size    : natural range 1 to 2;
 
     signal meta_current, meta_future : meta_fsm_t := META_FSM_RESET_VALUE;
@@ -223,8 +228,7 @@ begin
         end case;
     end process;
 
-    -- TODO: generalize to SS 2 ch and HS 1 + 2 ch
-    -- TODO: be able to reset / change modes
+    -- TODO: currently 12-bit meta mode only works for SS 1-channel
     meta_fsm_comb : process(all)
         variable discontinuous  : std_logic;
         variable prev_timestamp : unsigned(63 downto 0);
@@ -237,7 +241,12 @@ begin
 
         out_timestamp := unsigned(meta_current.curr_data(95 downto 32)) + meta_current.offset;
         prev_timestamp := unsigned(meta_current.next_data(95 downto 32));
-        if (timestamp_in - prev_timestamp /= 508) then
+
+        if (meta_current.state = START_12) then
+            prev_timestamp := unsigned(meta_current.curr_data(95 downto 32));
+        end if;
+            
+        if (timestamp_in - prev_timestamp /= meta_current.expected_delta) then
             discontinuous := '1';
         else
             discontinuous := '0';
@@ -249,17 +258,32 @@ begin
                     meta_rreq_out <= '1';
                     if (twelve_bit_mode_en = '1') then
                         meta_future.next_data <= meta_data_in;
-                        meta_rreq_out <= '1';
-                        meta_future.state <= FILL_BUF;
+                        meta_future.expected_delta <= 508;
+                        meta_future.state <= START_12;
                     else
-                        meta_future.write_downcount <= 3;
-                        meta_future.out_data <= meta_data_in;
-                        meta_future.ret <= IDLE;
-                        meta_future.state <= WRITE;
+                        meta_future.curr_data <= meta_data_in;
+                        meta_future.expected_delta <= expected_delta;
+                        meta_future.ret <= START_16;
+                        meta_future.state <= START_16;
                     end if;
                 end if;
 
-            when FILL_BUF =>
+            when START_16 =>
+                if (meta_empty_in = '0') then
+                    meta_rreq_out <= '1';
+
+                    meta_future.out_data <= 
+                        meta_current.curr_data(127 downto 112) &
+                        discontinuous &
+                        meta_current.curr_data(110 downto 0);
+
+                    meta_future.curr_data <= meta_data_in;
+
+                    meta_future.write_downcount <= 3;
+                    meta_future.state <= WRITE;
+                end if;
+
+            when START_12 =>
                 if (meta_empty_in = '0') then
                     meta_rreq_out <= '1';
                     meta_future.curr_data <= meta_current.next_data;
@@ -275,8 +299,7 @@ begin
 
             when READ =>
                 if (meta_current.skip_downcount = 0 and meta_current.offset_delta = 168) then
-                    -- TODO: change modes
-                    meta_future.state <= FILL_BUF;
+                    meta_future.state <= START_12;
                 elsif (meta_empty_in = '0') then
 
                     -- Flags are the most signifigant bits, discontinuous is bit 15
@@ -325,11 +348,26 @@ begin
 
     -- Transfer size for DMAs depends on USB speed
     calculate_conditionals : process(reset, clock)
+        variable expected_delta_temp : integer range 127 to 1016;
     begin
+        -- HS, dual channel, 16-bit
+        expected_delta_temp := 127;
+        if (usb_speed = '0') then
+            expected_delta_temp := expected_delta_temp * 2;        
+        end if;
+        if (dual_channel_en = '0') then
+            expected_delta_temp := expected_delta_temp * 2;        
+        end if;
+        if (eight_bit_mode_en = '1') then
+            expected_delta_temp := expected_delta_temp * 2;        
+        end if;
+
         if (reset = '1') then
             gpif_buf_size       <= GPIF_BUF_SIZE_SS;
+            expected_delta      <= 508;
             padding_size        <= 2;
         elsif (rising_edge(clock)) then
+            expected_delta      <= expected_delta_temp;
             if (usb_speed = '0') then
                 gpif_buf_size   <= GPIF_BUF_SIZE_SS;
                 padding_size    <= 2;
