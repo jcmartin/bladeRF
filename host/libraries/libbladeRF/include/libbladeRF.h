@@ -2357,7 +2357,7 @@ typedef enum {
 /**
  * The FPGA detects a discontinuity in metadata time stamps.
  * 
- * This is currently only implimented for the 12-bit mode.
+ * This means the samples within the message itself are probably invalid.
  */
 #define BLADERF_META_STATUS_HW_OVERRUN (1 << 15)
 

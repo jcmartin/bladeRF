@@ -658,7 +658,7 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                 break;
 
 
-            case SYNC_STATE_USING_BUFFER_META: /* SC16Q11 buffers w/ metadata */
+            case SYNC_STATE_USING_BUFFER_META: /* SC16Q11 + SC12Q11 buffers w/ metadata */
                 MUTEX_LOCK(&b->lock);
 
                 switch (s->meta.state) {
@@ -691,7 +691,6 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                              * it and is not valid so skip, seeking to the first
                              * valid message if nothing copied yet, otherwise
                              * returning early */
-                            // TODO: this is true only for 12-bit mode
 
                             log_debug(
                                 "FPGA detected invalid message @ buffer "
