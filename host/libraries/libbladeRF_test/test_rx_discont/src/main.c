@@ -44,7 +44,7 @@
 #define SAMPLE_RATE_MAX 122880000
 #define RESET_EXPECTED  UINT32_MAX
 
-#define OPTSTR "hd:s:c:i:m:b:n:x:t:v:"
+#define OPTSTR "hd:s:p:c:i:m:b:n:x:t:v:"
 const struct option long_options[] = {
     { "help",           no_argument,        0,          'h' },
     { "device",         required_argument,  0,          'd' },
@@ -128,7 +128,7 @@ static void print_usage(const char *argv0)
 
 int handle_cmdline(int argc, char *argv[], struct app_params *p)
 {
-    int c, idx, out;
+    int c, idx;
     bladerf_log_level lvl;
     bool ok;
 
@@ -174,7 +174,7 @@ int handle_cmdline(int argc, char *argv[], struct app_params *p)
                 break;
 
             case 'p':
-                p->samples_per_iter = str2int(optarg, 0, UINT_MAX, &ok);
+                p->samples_per_iter = str2uint(optarg, 0, UINT_MAX, &ok);
                 if (!ok) {
                     fprintf(stderr, "Invalid # of samples per iteration: %s\n", optarg);
                     return -1;
@@ -182,7 +182,7 @@ int handle_cmdline(int argc, char *argv[], struct app_params *p)
                 break;
 
             case 'b':
-                p->buffer_size = str2int(optarg, 0, UINT_MAX, &ok);
+                p->buffer_size = str2uint(optarg, 0, UINT_MAX, &ok);
                 if (!ok) {
                     fprintf(stderr, "Invalid buffer size: %s\n", optarg);
                     return -1;
@@ -190,7 +190,7 @@ int handle_cmdline(int argc, char *argv[], struct app_params *p)
                 break;
 
             case 'n':
-                p->num_buffers = str2int(optarg, 0, UINT_MAX, &ok);
+                p->num_buffers = str2uint(optarg, 0, UINT_MAX, &ok);
                 if (!ok) {
                     fprintf(stderr, "Invalid num_buffers: %s\n", optarg);
                     return -1;
@@ -198,7 +198,7 @@ int handle_cmdline(int argc, char *argv[], struct app_params *p)
                 break;
 
             case 'x':
-                p->num_xfers = str2int(optarg, 0, UINT_MAX, &ok);
+                p->num_xfers = str2uint(optarg, 0, UINT_MAX, &ok);
                 if (!ok) {
                     fprintf(stderr, "Invalid num_xfers: %s\n", optarg);
                     return -1;
@@ -206,7 +206,7 @@ int handle_cmdline(int argc, char *argv[], struct app_params *p)
                 break;
             
             case 't':
-                p->timeout = str2int(optarg, 0, UINT_MAX, &ok);
+                p->timeout = str2uint(optarg, 0, UINT_MAX, &ok);
                 if (!ok) {
                     fprintf(stderr, "Invalid timeout: %s\n", optarg);
                     return -1;
@@ -248,7 +248,7 @@ int handle_cmdline(int argc, char *argv[], struct app_params *p)
                     p->fmt = BLADERF_FORMAT_SC16_Q11_META;
                 } else if (strcmp(optarg, "12m") == 0) {
                     p->fmt = BLADERF_FORMAT_SC12_Q11_META;
-                } else if (strcmp(optarg, "8m" == 0)) {
+                } else if (strcmp(optarg, "8m") == 0) {
                     p->fmt = BLADERF_FORMAT_SC8_Q7_META;
                 } else {
                     fprintf(stderr, "Unknown bitmode: %s\n", optarg);
@@ -336,7 +336,7 @@ int32_t check_12_bit_buffer(
     for (i = 0; i < n; i++) {
         if (curr != s[2*i] || -curr != s[2*i+1]) {
             printf(
-                "Unexpected I/Q, expected (%04x :+ %04x) got (%04x :+ %04x)\n",
+                "Unexpected I/Q, expected (%d :+ %d) got (%d :+ %d)\n",
                 curr, -curr, s[2 * i], s[2 * i + 1]);
             *ok = false;
             curr = s[2*i];
@@ -353,23 +353,22 @@ int32_t check_12_bit_buffer(
 int32_t check_8_bit_buffer(
     bool *ok, int16_t *samples, int32_t curr, unsigned int n, bool reset)
 {
-    // I = curr(11 downto 4)
-    // Q = curr(27 downto 16)
+    // I and Q form a little-endian 16-bit value (shifting done in signal_gen)
     unsigned int i;
     int8_t *s = (int8_t *)samples;
     int8_t curr_i, curr_q;
     *ok = true;
     if (reset) {
-        curr = s[0] | (int32_t) s[1] << 16;
+        curr = ((int32_t) s[0] & 0xFF) | ((int32_t) s[1] << 8);
     }
     for (i = 0; i < n; i++) {
         curr_i = curr & 0xFF;
-        curr_q = (curr >> 16) & 0xFF;
+        curr_q = (curr >> 8) & 0xFF;
         if (curr_i != s[2*i] || curr_q != s[2*i+1]) {
-            printf("Unexpected I/Q, expected (%02x :+ %02x) got (%02x :+ %02x)",
+            printf("Unexpected I/Q, expected (%d :+ %d) got (%d :+ %d)\n",
                    curr_i, curr_q, s[2 * i], s[2 * i + 1]);
             *ok = false;
-            curr = s[2*i] | (int32_t) s[2*i+1] << 16;
+            curr = ((int32_t) s[2*i] & 0xFF) | ((int32_t) s[2*i+1] << 8);
         }
 
         curr++;
@@ -386,12 +385,12 @@ int32_t check_16_bit_buffer(
     unsigned int i;
     *ok = true;
     if (reset) {
-        curr = s[0] | (int32_t) s[1] << 16;
+        curr = ((int32_t) s[0] & 0xFFFF) | ((int32_t) s[1] << 16);
     }
     for (i = 0; i < n; i++) {
-        val = s[2*i] | (int32_t) s[2*i+1] << 16;
+        val = ((int32_t) s[2*i] & 0xFFFF) | ((int32_t) s[2*i+1] << 16);
         if (curr != val) {
-            printf("Unexpected I/Q, expected %08x got %08x\n", curr, val);
+            printf("Unexpected I/Q, expected %d got %d\n", curr, val);
             *ok = false;
             curr = val;
         }
@@ -415,7 +414,7 @@ int run_test(struct bladerf *dev, struct app_params *p)
     bool dual_channel = p->layout == BLADERF_RX_X2;
     bool is_meta = is_meta_format(p->fmt);
 
-    unsigned int i, actual_count = num_samples, n = 0, n_hw_overruns = 0,
+    unsigned int i, actual_count, n = 0, n_hw_overruns = 0,
                     n_sw_overruns = 0, n_non_contiguous = 0;
     bool is_contiguous0 = true, is_contiguous1 = true, reset = true;
     int32_t curr0, curr1;
@@ -429,6 +428,7 @@ int run_test(struct bladerf *dev, struct app_params *p)
         return status;
     }
 
+    int16_t *samples1;
     int16_t *samples = malloc(2 * num_samples * sizeof(int16_t));
     if (samples == NULL) {
         perror("malloc");
@@ -441,6 +441,19 @@ int run_test(struct bladerf *dev, struct app_params *p)
         goto out;
     }
 
+    int32_t (*check_buffer)(bool *, int16_t *, int32_t, unsigned int, bool);
+    bladerf_format deinterleave_format;
+    
+    if (is_twelve_bit) {
+        check_buffer = &check_12_bit_buffer;
+    } else if (is_sixteen_bit) {
+        check_buffer = &check_16_bit_buffer;
+        deinterleave_format = BLADERF_FORMAT_SC16_Q11;
+    } else {
+        check_buffer = &check_8_bit_buffer;
+        deinterleave_format = BLADERF_FORMAT_SC8_Q7;
+    }
+
     printf("Running %u iterations.\n\n", p->iterations);
     memset(&meta, 0, sizeof(meta));
     meta.flags = BLADERF_META_FLAG_RX_NOW;
@@ -450,7 +463,8 @@ int run_test(struct bladerf *dev, struct app_params *p)
         if (status != 0) {
             fprintf(stderr, "\nRX failed: %s\n", bladerf_strerror(status));
             break;
-        } 
+        }
+        actual_count = num_samples;
         
         if (is_meta) {
             actual_count = meta.actual_count;
@@ -469,41 +483,15 @@ int run_test(struct bladerf *dev, struct app_params *p)
             }
         }
         
-        if (dual_channel && is_sixteen_bit) {
-            status = bladerf_deinterleave_stream_buffer(
-                p->layout, BLADERF_FORMAT_SC16_Q11, actual_count, samples);
-
-            if (status != 0) {
-                fprintf(stderr, "Failed to deinterleave buffer: %s\n",
-                        bladerf_strerror(status));
-                goto out;
+        // Check samples
+        if (dual_channel) {
+            if (is_twelve_bit) {
+                status = bladerf_align_and_deinterleave_12_bit_buffer(
+                    actual_count, samples);
+            } else {
+                status = bladerf_deinterleave_stream_buffer(
+                    p->layout, deinterleave_format, actual_count, samples);
             }
-
-            curr0 = check_16_bit_buffer(&is_contiguous0, samples, curr0,
-                                        actual_count / 2, reset);
-
-            curr1 = check_16_bit_buffer(&is_contiguous1, samples + actual_count,
-                                        curr1, actual_count / 2, reset);
-
-        } else if (dual_channel && is_twelve_bit) {
-            status = bladerf_align_and_deinterleave_12_bit_buffer(actual_count,
-                                                                  samples);
-
-            if (status != 0) {
-                fprintf(stderr, "Failed to deinterleave buffer: %s\n",
-                        bladerf_strerror(status));
-                goto out;
-            }
-
-            curr0 = check_12_bit_buffer(&is_contiguous0, samples, curr0,
-                                        actual_count / 2, reset);
-
-            curr1 = check_16_bit_buffer(&is_contiguous1, samples + actual_count,
-                                        curr1, actual_count / 2, reset);
-
-        } else if (dual_channel) {
-            status = bladerf_deinterleave_stream_buffer(
-                p->layout, BLADERF_FORMAT_SC8_Q7, actual_count, samples);
 
             if (status != 0) {
                 fprintf(stderr, "Failed to deinterleave buffer: %s\n",
@@ -511,15 +499,17 @@ int run_test(struct bladerf *dev, struct app_params *p)
                 goto out;
             }
             
-            curr0 = check_8_bit_buffer(&is_contiguous0, samples, curr0,
-                                        actual_count / 2, reset);
+            // Ch-1 samples offset
+            samples1 = samples + actual_count;
+            actual_count /= 2;
 
-            curr1 = check_8_bit_buffer(&is_contiguous1, samples + actual_count,
-                                        curr1, actual_count / 2, reset);
+            if (!is_twelve_bit && !is_sixteen_bit) {
+                // 8-bit samples take up half the space
+                samples1 = samples + actual_count;
+            }
 
-        } else if (is_sixteen_bit) {
-            curr0 = check_16_bit_buffer(&is_contiguous0, samples, curr0,
-                                        actual_count, reset);
+            curr1 = (*check_buffer)(&is_contiguous1, samples1,
+                                 curr1, actual_count, reset);
         } else if (is_twelve_bit) {
             status = bladerf_align_12_bit_buffer(actual_count, samples);
 
@@ -528,24 +518,20 @@ int run_test(struct bladerf *dev, struct app_params *p)
                         bladerf_strerror(status));
                 goto out;
             }
-
-            curr0 = check_12_bit_buffer(&is_contiguous0, samples, curr0,
-                                        actual_count, reset);
-
-        } else {
-            curr0 = check_8_bit_buffer(&is_contiguous0, samples, curr0,
-                                       actual_count, reset);
         }
 
+        curr0 = (*check_buffer)(&is_contiguous0, samples, curr0, actual_count,
+                                reset);
 
         if (!is_contiguous0 || !is_contiguous1) {
             n_non_contiguous++;
             fprintf(stderr, "Iteration %u: Non-contiguous detected.\n", i);
         }
         n++;
+        reset = false;
     }
 
-    printf("Total Iterations: %u\nDisc: %u\nHW overruns: %u\nSW overruns %u",
+    printf("Total Iterations: %u\nDisc: %u\nHW overruns: %u\nSW overruns %u\n",
             n, n_non_contiguous, n_hw_overruns, n_sw_overruns);
 
 out:
@@ -571,6 +557,22 @@ int main(int argc, char *argv[])
         return -1;
     }
 
+    bladerf_rx_mux prev_mux = BLADERF_RX_MUX_INVALID, new_mux = BLADERF_RX_MUX_32BIT_COUNTER;
+    if (params.fmt == BLADERF_FORMAT_SC12_Q11 || params.fmt == BLADERF_FORMAT_SC12_Q11_META) {
+        new_mux = BLADERF_RX_MUX_12BIT_COUNTER;
+    }
+    bladerf_get_rx_mux(dev, &prev_mux);
+    if (status != 0) {
+        prev_mux = BLADERF_RX_MUX_INVALID;
+    }
+    printf("Enabling RX Counter...\n");
+    status = bladerf_set_rx_mux(dev, new_mux);
+    if (status != 0) {
+        fprintf(stderr, "Failed to enable counter: %s\n",
+                bladerf_strerror(status));
+        goto out;
+    }
+
     if (params.samplerate > 61440000) {
         printf("Enabling oversampling mode...\n");
         status = bladerf_enable_feature(dev, BLADERF_FEATURE_OVERSAMPLE, true);
@@ -579,18 +581,6 @@ int main(int argc, char *argv[])
                     bladerf_strerror(status));
             goto out;
         }
-    }
-
-    bladerf_rx_mux mux = BLADERF_RX_MUX_32BIT_COUNTER;
-    if (params.fmt == BLADERF_FORMAT_SC12_Q11 || params.fmt == BLADERF_FORMAT_SC12_Q11_META) {
-        mux = BLADERF_RX_MUX_12BIT_COUNTER;
-    }
-    printf("Enabling RX Counter...\n");
-    status = bladerf_set_rx_mux(dev, mux);
-    if (status != 0) {
-        fprintf(stderr, "Failed to enable counter: %s\n",
-                bladerf_strerror(status));
-        goto out;
     }
     
     status = set_sample_rate(dev, params.layout, params.samplerate);
@@ -601,6 +591,9 @@ int main(int argc, char *argv[])
     status = run_test(dev, &params);
 
 out:
+    if (prev_mux != BLADERF_RX_MUX_INVALID) {
+        bladerf_set_rx_mux(dev, prev_mux);
+    }
     bladerf_close(dev);
     return status;
 }
