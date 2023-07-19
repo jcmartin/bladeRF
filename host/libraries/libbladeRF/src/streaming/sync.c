@@ -173,7 +173,7 @@ int sync_init(struct bladerf_sync *sync,
 
     if (format == BLADERF_FORMAT_SC12_Q11_META) {
         if ((layout & BLADERF_DIRECTION_MASK) == BLADERF_TX || (layout == BLADERF_RX_X2)) {
-            log_error("TX for 12-bit mode is not supported");
+            log_error("TX or 2-channel RX for 12-bit mode is not supported");
             return BLADERF_ERR_UNSUPPORTED;
         }
     }
