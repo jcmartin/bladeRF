@@ -242,7 +242,7 @@ begin
         out_timestamp := unsigned(meta_current.curr_data(95 downto 32)) + meta_current.offset;
         prev_timestamp := unsigned(meta_current.next_data(95 downto 32));
 
-        if (meta_current.state = START_12) then
+        if (meta_current.state = START_16) then
             prev_timestamp := unsigned(meta_current.curr_data(95 downto 32));
         end if;
             
