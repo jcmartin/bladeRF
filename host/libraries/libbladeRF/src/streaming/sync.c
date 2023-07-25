@@ -1216,6 +1216,7 @@ int sync_tx(struct bladerf_sync *s,
             case SYNC_STATE_USING_BUFFER_PAD:
                 assert(!"Invalid state: 12-bit tx not implemented");
                 status = BLADERF_ERR_UNEXPECTED;
+                break;
 
             case SYNC_STATE_USING_BUFFER_META: /* SC16Q11 buffers w/ metadata */
                 MUTEX_LOCK(&b->lock);

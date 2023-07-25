@@ -33,6 +33,7 @@
 #include <getopt.h>
 
 #include "conversions.h"
+#include "log.h"
 
 /* TODO Make these configurable */
 #define BUFFER_SIZE 4096
@@ -324,21 +325,24 @@ int enable_rx(struct bladerf *dev, bladerf_channel_layout layout) {
     return status;
 }
 
-int32_t check_12_bit_buffer(
-    bool *ok, int16_t *s, int32_t curr, unsigned int n, bool reset)
+int32_t check_12_bit_buffer(unsigned int *n_skips,
+                            int16_t *s,
+                            int32_t curr,
+                            unsigned int n_samples,
+                            bool reset)
 {
     // 12-bit counters go from -2047 to 2047 with Q = -I
     unsigned int i;
-    *ok = true;
+    *n_skips = 0;
     if (reset) {
         curr = s[0];
     }
-    for (i = 0; i < n; i++) {
+    for (i = 0; i < n_samples; i++) {
         if (curr != s[2*i] || -curr != s[2*i+1]) {
-            printf(
+            log_verbose(
                 "Unexpected I/Q, expected (%d :+ %d) got (%d :+ %d)\n",
                 curr, -curr, s[2 * i], s[2 * i + 1]);
-            *ok = false;
+            (*n_skips)++;
             curr = s[2*i];
         }
 
@@ -350,24 +354,27 @@ int32_t check_12_bit_buffer(
     return curr;
 }
 
-int32_t check_8_bit_buffer(
-    bool *ok, int16_t *samples, int32_t curr, unsigned int n, bool reset)
+int32_t check_8_bit_buffer(unsigned int *n_skips,
+                           int16_t *samples,
+                           int32_t curr,
+                           unsigned int n_samples,
+                           bool reset)
 {
     // I and Q form a little-endian 16-bit value (shifting done in signal_gen)
     unsigned int i;
     int8_t *s = (int8_t *)samples;
     int8_t curr_i, curr_q;
-    *ok = true;
+    *n_skips = 0;
     if (reset) {
         curr = ((int32_t) s[0] & 0xFF) | ((int32_t) s[1] << 8);
     }
-    for (i = 0; i < n; i++) {
+    for (i = 0; i < n_samples; i++) {
         curr_i = curr & 0xFF;
         curr_q = (curr >> 8) & 0xFF;
         if (curr_i != s[2*i] || curr_q != s[2*i+1]) {
-            printf("Unexpected I/Q, expected (%d :+ %d) got (%d :+ %d)\n",
+            log_verbose("Unexpected I/Q, expected (%d :+ %d) got (%d :+ %d)\n",
                    curr_i, curr_q, s[2 * i], s[2 * i + 1]);
-            *ok = false;
+            (*n_skips)++;
             curr = ((int32_t) s[2*i] & 0xFF) | ((int32_t) s[2*i+1] << 8);
         }
 
@@ -377,21 +384,24 @@ int32_t check_8_bit_buffer(
     return curr;
 }
 
-int32_t check_16_bit_buffer(
-    bool *ok, int16_t *s, int32_t curr, unsigned int n, bool reset)
+int32_t check_16_bit_buffer(unsigned int *n_skips,
+                            int16_t *s,
+                            int32_t curr,
+                            unsigned int n_samples,
+                            bool reset)
 {
     // I and Q form a little-endian 32-bit value
     int32_t val;
     unsigned int i;
-    *ok = true;
+    *n_skips = 0;
     if (reset) {
         curr = ((int32_t) s[0] & 0xFFFF) | ((int32_t) s[1] << 16);
     }
-    for (i = 0; i < n; i++) {
+    for (i = 0; i < n_samples; i++) {
         val = ((int32_t) s[2*i] & 0xFFFF) | ((int32_t) s[2*i+1] << 16);
         if (curr != val) {
-            printf("Unexpected I/Q, expected %d got %d\n", curr, val);
-            *ok = false;
+            log_verbose("Unexpected I/Q, expected %d got %d\n", curr, val);
+            (*n_skips)++;
             curr = val;
         }
 
@@ -414,9 +424,10 @@ int run_test(struct bladerf *dev, struct app_params *p)
     bool dual_channel = p->layout == BLADERF_RX_X2;
     bool is_meta = is_meta_format(p->fmt);
 
-    unsigned int i, actual_count, n = 0, n_hw_overruns = 0,
-                    n_sw_overruns = 0, n_non_contiguous = 0;
-    bool is_contiguous0 = true, is_contiguous1 = true, reset = true;
+    unsigned int i, actual_count, n = 0, n_hw_overruns = 0, n_sw_overruns = 0,
+                                  n_non_contiguous = 0, n_skips0 = 0,
+                                  n_skips1 = 0, n_skips_tot = 0;
+    bool reset = true;
     int32_t curr0, curr1;
 
     status = bladerf_sync_config(dev, p->layout, p->fmt, p->num_buffers,
@@ -441,7 +452,8 @@ int run_test(struct bladerf *dev, struct app_params *p)
         goto out;
     }
 
-    int32_t (*check_buffer)(bool *, int16_t *, int32_t, unsigned int, bool);
+    int32_t (*check_buffer)(unsigned int *, int16_t *, int32_t, unsigned int,
+                            bool);
     bladerf_format deinterleave_format;
     
     if (is_twelve_bit) {
@@ -454,7 +466,8 @@ int run_test(struct bladerf *dev, struct app_params *p)
         deinterleave_format = BLADERF_FORMAT_SC8_Q7;
     }
 
-    printf("Running %u iterations.\n\n", p->iterations);
+    printf("Running %u iterations with %u samples each.\n\n", p->iterations,
+           num_samples);
     memset(&meta, 0, sizeof(meta));
     meta.flags = BLADERF_META_FLAG_RX_NOW;
 
@@ -508,7 +521,7 @@ int run_test(struct bladerf *dev, struct app_params *p)
                 samples1 = samples + actual_count;
             }
 
-            curr1 = (*check_buffer)(&is_contiguous1, samples1,
+            curr1 = (*check_buffer)(&n_skips1, samples1,
                                  curr1, actual_count, reset);
         } else if (is_twelve_bit) {
             status = bladerf_align_12_bit_buffer(actual_count, samples);
@@ -520,19 +533,21 @@ int run_test(struct bladerf *dev, struct app_params *p)
             }
         }
 
-        curr0 = (*check_buffer)(&is_contiguous0, samples, curr0, actual_count,
+        curr0 = (*check_buffer)(&n_skips0, samples, curr0, actual_count,
                                 reset);
 
-        if (!is_contiguous0 || !is_contiguous1) {
+        if (n_skips0 > 0 || n_skips1 > 0) {
             n_non_contiguous++;
-            fprintf(stderr, "Iteration %u: Non-contiguous detected.\n", i);
+            // fprintf(stderr, "Iteration %u: %u Non-contiguous detected.\n", i, n_skips0 + n_skips1);
         }
+        n_skips_tot += n_skips0 + n_skips1;
         n++;
         reset = false;
     }
 
-    printf("Total Iterations: %u\nDisc: %u\nHW overruns: %u\nSW overruns %u\n",
-            n, n_non_contiguous, n_hw_overruns, n_sw_overruns);
+    printf("Total Iterations: %u\nIterations with disc: %u\nTotal disc: %u\nHW "
+           "overruns: %u\nSW overruns %u\n",
+           n, n_non_contiguous, n_skips_tot, n_hw_overruns, n_sw_overruns);
 
 out:
     free(samples);
