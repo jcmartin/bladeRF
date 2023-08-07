@@ -58,6 +58,10 @@ option(ENABLE_BLADERF_FIRMWARE
     "Build firmware for the bladeRF 1.0"
     ON
 )
+option(ENABLE_FX3_BENCHMARK
+    "Build firmware for the bladeRF 1.0"
+    ON
+)
 
 ################################################################################
 # Build Configuration
@@ -71,6 +75,7 @@ set(INCLUDE_DIRS
     "${FX3_INCLUDE_DIR}")
 
 set(SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src")
+set(BENCHMARK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/benchmark")
 
 # Base filenames for output files
 set(BLADERF_FW bladeRF_fw_v${VERSION_INFO_BASE})
@@ -89,6 +94,13 @@ set(SRC_BLADERF
     "${FX3_FW_COMMON_DIR}/cyfxtx.c"
     "${SRC_DIR}/bladeRF1.c"
     "${SRC_DIR}/bladeRF2.c"
+)
+
+set(SRC_BENCHMARK
+    "${BENCHMARK_DIR}/benchmark.c"
+    "${BENCHMARK_DIR}/cyfxusbdscr.c"
+    "${FX3_FW_COMMON_DIR}/cyfx_gcc_startup.S"
+    "${FX3_FW_COMMON_DIR}/cyfxtx.c"
 )
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
@@ -151,6 +163,13 @@ target_link_libraries(bladeRF_fx3
     "${FX3_LIBRARY_DIR}/libcyu3threadx.a"
 )
 
+add_library(benchmark_fx3 STATIC ${SRC_BENCHMARK})
+target_link_libraries(benchmark_fx3
+    "${FX3_LIBRARY_DIR}/libcyfxapi.a"
+    "${FX3_LIBRARY_DIR}/libcyu3lpp.a"
+    "${FX3_LIBRARY_DIR}/libcyu3threadx.a"
+)
+
 if(ENABLE_BLADERF_FIRMWARE)
     add_executable(${BLADERF_FW}.elf ${SRC_BLADERF})
     target_link_libraries(${BLADERF_FW}.elf
@@ -163,6 +182,20 @@ if(ENABLE_BLADERF_FIRMWARE)
     )
     set_target_properties(${BLADERF_FW}.elf
         PROPERTIES LINK_FLAGS "-Wl,-Map,output/${BLADERF_FW}.map")
+endif()
+
+if(ENABLE_FX3_BENCHMARK)
+    add_executable(benchmark.elf ${SRC_BENCHMARK})
+    target_link_libraries(benchmark.elf
+        "${FX3_LIBRARY_DIR}/libcyfxapi.a"
+        "${FX3_LIBRARY_DIR}/libcyu3lpp.a"
+        "${FX3_LIBRARY_DIR}/libcyu3threadx.a"
+        "${ARM_NONE_EABI_LIBC}"
+        "${ARM_NONE_EABI_LIBGCC}"
+        benchmark_fx3
+    )
+    set_target_properties(benchmark.elf
+        PROPERTIES LINK_FLAGS "-Wl,-Map,output/benchmark.map")
 endif()
 
 ################################################################################
@@ -181,6 +214,18 @@ if(ENABLE_BLADERF_FIRMWARE)
 
     add_custom_target(${BLADERF_FW}.img ALL
         DEPENDS elf2img ${ELF2IMG_WORK_DIR}/${BLADERF_FW}.elf ${ELF2IMG_WORK_DIR}/${BLADERF_FW}.img)
+endif()
+
+if(ENABLE_FX3_BENCHMARK)
+    add_custom_command(
+        OUTPUT ${ELF2IMG_WORK_DIR}/benchmark.img
+        COMMAND ${ELF2IMG} -i ${ELF2IMG_WORK_DIR}/benchmark.elf -o ${ELF2IMG_WORK_DIR}/benchmark.img
+        DEPENDS ${ELF2IMG_WORK_DIR}/benchmark.elf
+        COMMENT "Creating benchmark.img. Interrupt vector removal note is expected."
+    )
+
+    add_custom_target(benchmark.img ALL
+        DEPENDS elf2img ${ELF2IMG_WORK_DIR}/benchmark.elf ${ELF2IMG_WORK_DIR}/benchmark.img)
 endif()
 
 ################################################################################

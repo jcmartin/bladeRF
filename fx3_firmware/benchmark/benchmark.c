@@ -3,9 +3,7 @@
 #include "cyu3dma.h"
 #include "cyu3error.h"
 #include "cyu3usb.h"
-#include "cyu3tx.h"
 #include "cyu3pib.h"
-#include "cyu3utils.h"
 
 #include "benchmark.h"
 #include "cyfxgpif.h"
@@ -143,10 +141,10 @@ CyFxApplnStop (
     /* Update the flag so that the application thread is notified of this. */
     glIsApplnActive = CyFalse;
 
-    CyU3PGpifDisable (CyTrue);
+    CyU3PGpifDisable(CyTrue);
 
     /* Destroy the channels */
-    CyU3PDmaChannelDestroy (&glDmaChHandle);
+    CyU3PDmaMultiChannelDestroy(&glDmaChHandle);
 
     /* Flush the endpoint memory */
     CyU3PUsbFlushEp(CY_FX_EP_CONSUMER);
@@ -177,8 +175,6 @@ CyFxApplnUSBSetupCB (
     uint8_t  bType, bTarget;
     uint16_t wValue, wIndex, wLength;
     CyBool_t isHandled = CyFalse;
-    uint16_t temp;
-    CyU3PReturnStatus_t status;
 
     /* Decode the fields from the setup request. */
     bReqType = (setupdat0 & CY_U3P_USB_REQUEST_TYPE_MASK);
@@ -219,7 +215,7 @@ CyFxApplnUSBSetupCB (
                 if (wIndex == CY_FX_EP_CONSUMER)
                 {
                     CyU3PUsbSetEpNak(CY_FX_EP_CONSUMER, CyTrue);
-                    CyU3PBusyWait(125);
+                    CyFx3BusyWait(125);
 
                     CyU3PDmaMultiChannelReset(&glDmaChHandle);
                     CyU3PUsbFlushEp(CY_FX_EP_CONSUMER);
@@ -245,9 +241,6 @@ CyFxApplnUSBEventCB (
     uint16_t            evdata  /* Event data */
     )
 {
-    if ((evtype != CY_U3P_USB_EVENT_EP0_STAT_CPLT) && (evtype != CY_U3P_USB_EVENT_RESUME))
-        j (2, "USB event: %d %d\r\n", evtype, evdata);
-
     switch (evtype) {
         case CY_U3P_USB_EVENT_SETCONF:
             /* If the application is already active
@@ -404,9 +397,6 @@ void
 CyFxAppThread_Entry (
         uint32_t input)
 {
-    CyU3PReturnStatus_t stat;
-    CyU3PUsbLinkPowerMode curState;
-
     /* Initialize the application */
     CyFxApplnInit();
 

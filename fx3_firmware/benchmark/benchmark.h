@@ -31,3 +31,5 @@ extern const uint8_t CyFxUSBProductDscr[];
 extern const uint8_t CyFxUSB20DeviceDscr[];
 extern const uint8_t CyFxUSB30DeviceDscr[];
 extern const uint8_t CyFxUSBProductDscr[];
+
+#include "cyu3externcend.h"
