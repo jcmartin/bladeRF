@@ -272,9 +272,14 @@ static void NuandRFLinkStart(void)
     CyU3PMemSet ((uint8_t *)&epCfg, 0, sizeof (epCfg));
     epCfg.enable = CyTrue;
     epCfg.epType = CY_U3P_USB_EP_BULK;
-    epCfg.burstLen = (usbSpeed == CY_U3P_SUPER_SPEED ? 15 : 1);
+    epCfg.burstLen = 1;
     epCfg.streams = 0;
     epCfg.pcktSize = size;
+
+    if (usbSpeed == CY_U3P_SUPER_SPEED) {
+        epCfg.burstLen = 16;
+        CyU3PUsbEPSetBurstMode(BLADE_RF_SAMPLE_EP_CONSUMER, CyTrue);
+    }
 
     /* Producer endpoint configuration */
     apiRetStatus = CyU3PSetEpConfig(BLADE_RF_SAMPLE_EP_PRODUCER, &epCfg);
@@ -291,8 +296,8 @@ static void NuandRFLinkStart(void)
     }
 
     CyU3PMemSet((uint8_t *)&dmaCfg, 0, sizeof(dmaCfg));
-    dmaCfg.size  = size * 2;
-    dmaCfg.count = 22;
+    dmaCfg.size  = size * TX_DMA_BUF_SIZE_MULTIPLIER;
+    dmaCfg.count = TX_DMA_BUF_COUNT;
     dmaCfg.prodSckId = BLADE_RF_SAMPLE_EP_PRODUCER_USB_SOCKET;
     dmaCfg.consSckId = CY_U3P_PIB_SOCKET_3;
     dmaCfg.dmaMode = CY_U3P_DMA_MODE_BYTE;
@@ -319,8 +324,8 @@ static void NuandRFLinkStart(void)
 
     if (!loopback) {
         CyU3PMemSet((uint8_t *)&dmaRxCfg, 0, sizeof(dmaRxCfg));
-        dmaRxCfg.size  = size * 2;
-        dmaRxCfg.count = 22;
+        dmaRxCfg.size  = size * RX_DMA_BUF_SIZE_MULTIPLIER;
+        dmaRxCfg.count = RX_DMA_BUF_COUNT;
         dmaRxCfg.validSckCount = 2;
         dmaRxCfg.prodSckId[0] = CY_U3P_PIB_SOCKET_0;
         dmaRxCfg.prodSckId[1] = CY_U3P_PIB_SOCKET_1;
