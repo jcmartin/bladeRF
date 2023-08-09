@@ -31,6 +31,13 @@ architecture arch of fx3_gpif_rx_tb is
     signal tx_sample_fifo      : tx_fifo_t           := TX_FIFO_T_DEFAULT;
     signal tx_meta_fifo        : meta_fifo_tx_t      := META_FIFO_TX_T_DEFAULT;
 
+    signal sample_fifo_rreq    : std_logic;
+    signal sample_fifo_rdata   : std_logic_vector(31 downto 0);
+    signal sample_fifo_rused   : std_logic_vector(sample_fifo.rused'high+1 downto 0);
+    signal meta_fifo_rreq      : std_logic;
+    signal meta_fifo_rempty    : std_logic;
+    signal meta_fifo_rdata     : std_logic_vector(31 downto 0);
+
     signal fx3_gpif, fx3_gpif_in, fx3_gpif_out : std_logic_vector(31 downto 0);
     signal fx3_gpif_oe         : std_logic;
     signal fx3_ctl, fx3_ctl_in, fx3_ctl_out, fx3_ctl_oe : std_logic_vector(12 downto 0);
@@ -130,6 +137,41 @@ begin
             adc_streams            => streams
         );
 
+    -- either pack samples into 12 bits or pass through 64 -> 32
+    u_twelve_bit_packer : entity work.twelve_bit_packer
+        generic map (
+            fifo_usedr_width => sample_fifo.rused'length
+        )
+        port map (
+            clock               =>  fx3_clock,
+            reset               =>  reset,
+
+            twelve_bit_mode_en  => '0',
+            eight_bit_mode_en   => '0',
+            dual_channel_en     => '0',
+            meta_en             => '1',
+            usb_speed           => '0',
+
+            -- sample fifo
+            sample_rreq_out     => sample_fifo.rreq,
+            sample_data_in      => sample_fifo.rdata,
+            sample_rused_in     => sample_fifo.rused,
+            
+            -- meta fifo
+            meta_rreq_out       => meta_fifo.rreq,
+            meta_empty_in       => meta_fifo.rempty,
+            meta_data_in        => meta_fifo.rdata,
+            
+            -- fx3 gpif controller
+            sample_rreq_in      => sample_fifo_rreq,
+            sample_data_out     => sample_fifo_rdata,
+            sample_rused_out    => sample_fifo_rused,
+            meta_rreq_in        => meta_fifo_rreq,
+            meta_empty_out      => meta_fifo_rempty,
+            meta_data_out       => meta_fifo_rdata
+        );
+
+
     -- FX3 GPIF
     U_fx3_gpif : entity work.fx3_gpif
         port map (
@@ -163,17 +205,17 @@ begin
             tx_meta_fifo_usedw  =>  tx_meta_fifo.wused,
             tx_meta_fifo_data   =>  tx_meta_fifo.wdata,
 
-            rx_fifo_read        =>  sample_fifo.rreq,
+            rx_fifo_read        =>  sample_fifo_rreq,
             rx_fifo_full        =>  sample_fifo.rfull,
             rx_fifo_empty       =>  sample_fifo.rempty,
-            rx_fifo_usedw       =>  sample_fifo.rused,
-            rx_fifo_data        =>  sample_fifo.rdata,
+            rx_fifo_usedw       =>  sample_fifo_rused,
+            rx_fifo_data        =>  sample_fifo_rdata,
 
-            rx_meta_fifo_read   =>  meta_fifo.rreq,
+            rx_meta_fifo_read   =>  meta_fifo_rreq,
             rx_meta_fifo_full   =>  meta_fifo.rfull,
-            rx_meta_fifo_empty  =>  meta_fifo.rempty,
+            rx_meta_fifo_empty  =>  meta_fifo_rempty,
             rx_meta_fifo_usedr  =>  meta_fifo.rused,
-            rx_meta_fifo_data   =>  meta_fifo.rdata
+            rx_meta_fifo_data   =>  meta_fifo_rdata
         );
 
     -- FX3 GPIF bidirectional signal control
