@@ -36,39 +36,35 @@
       <RepeatUntillNextTransition>True</RepeatUntillNextTransition>
       <RepeatCount>0</RepeatCount>
     </State>
-    <Transition ElementId="TRANSITION0" SourceState="STARTSTATE0" DestinationState="STATE0" Equation="LOGIC_ONE" />
     <State ElementId="STATE1" StateType="NormalState">
       <DisplayName>READ0</DisplayName>
       <RepeatUntillNextTransition>True</RepeatUntillNextTransition>
       <RepeatCount>0</RepeatCount>
-      <Action ElementId="DR_DATA0" ActionType="DR_DATA">
-        <IsDataCounterConnected>False</IsDataCounterConnected>
+      <Action ElementId="IN_DATA0" ActionType="IN_DATA">
         <DataSourceSink>Socket</DataSourceSink>
         <ThreadNumber>Thread0</ThreadNumber>
-        <SyncBurstMode>Enable</SyncBurstMode>
-        <DriveNewData>DriveNewData</DriveNewData>
-        <UpdateSource>True</UpdateSource>
+        <SampleData>True</SampleData>
+        <WriteDataIntoDataSink>True</WriteDataIntoDataSink>
       </Action>
     </State>
     <State ElementId="STATE2" StateType="NormalState">
       <DisplayName>READ1</DisplayName>
       <RepeatUntillNextTransition>True</RepeatUntillNextTransition>
       <RepeatCount>0</RepeatCount>
-      <Action ElementId="DR_DATA0" ActionType="DR_DATA">
-        <IsDataCounterConnected>False</IsDataCounterConnected>
+      <Action ElementId="IN_DATA0" ActionType="IN_DATA">
         <DataSourceSink>Socket</DataSourceSink>
         <ThreadNumber>Thread1</ThreadNumber>
-        <SyncBurstMode>Enable</SyncBurstMode>
-        <DriveNewData>DriveNewData</DriveNewData>
-        <UpdateSource>True</UpdateSource>
+        <SampleData>True</SampleData>
+        <WriteDataIntoDataSink>True</WriteDataIntoDataSink>
       </Action>
     </State>
-    <Transition ElementId="TRANSITION1" SourceState="STATE0" DestinationState="STATE1" Equation="DMA_RDY_TH0" />
     <State ElementId="STATE3" StateType="NormalState">
       <DisplayName>WAIT1</DisplayName>
       <RepeatUntillNextTransition>True</RepeatUntillNextTransition>
       <RepeatCount>0</RepeatCount>
     </State>
+    <Transition ElementId="TRANSITION0" SourceState="STARTSTATE0" DestinationState="STATE0" Equation="LOGIC_ONE" />
+    <Transition ElementId="TRANSITION1" SourceState="STATE0" DestinationState="STATE1" Equation="DMA_RDY_TH0" />
     <Transition ElementId="TRANSITION2" SourceState="STATE1" DestinationState="STATE3" Equation="!DMA_RDY_TH0" />
     <Transition ElementId="TRANSITION3" SourceState="STATE3" DestinationState="STATE2" Equation="DMA_RDY_TH1" />
     <Transition ElementId="TRANSITION4" SourceState="STATE2" DestinationState="STATE0" Equation="!DMA_RDY_TH1" />
