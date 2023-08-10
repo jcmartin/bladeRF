@@ -59,7 +59,7 @@ option(ENABLE_BLADERF_FIRMWARE
     ON
 )
 option(ENABLE_FX3_BENCHMARK
-    "Build firmware for the bladeRF 1.0"
+    "Build firmware and executable to test GPIF -> USB throughput (requires libusb)"
     ON
 )
 

@@ -1,14 +1,16 @@
 #include <stdlib.h>
 #include <libusb.h>
 #include <stdbool.h>
-#include <stdint.h>
+#include <sys/time.h>
+#include <stdio.h>
 
-#define VID     0x0
-#define PID     0x0
+#define VID     0x04b4
+#define PID     0x00f1
 
-#define N_ITER      100
-#define N_XFERS     2
-#define XFER_SIZE   1024
+#define N_XFERS     2000
+#define N_IN_FLIGHT 4
+// Max transfer size is 4 MiB
+#define XFER_SIZE   1024 * 1024
 #define EP_IN       0x81
 #define EP_DEBUG    0x82
 
@@ -21,10 +23,12 @@ struct stream {
 };
 
 void cancel_all_transfers(struct stream *s) {
+    printf("Cancelling all transfers: %d in flight & %d completed\n",
+           s->n_in_flight, s->n_completed);
     s->canceled = true;
     int ret;
 
-    for (int i = 0; i < N_XFERS; i++) {
+    for (int i = 0; i < N_IN_FLIGHT; i++) {
         ret = libusb_cancel_transfer(s->transfers[i]);
         // NOT_FOUND if the transfer is not in progress, already complete, or already cancelled
         if (ret && ret != LIBUSB_ERROR_NOT_FOUND) {
@@ -49,7 +53,7 @@ static void LIBUSB_CALL bulk_rx_cb(struct libusb_transfer *transfer) {
     }
     
     s->n_completed++;
-    if (s->n_completed + s->n_in_flight < N_ITER) {
+    if (s->n_completed + s->n_in_flight < N_XFERS) {
         int ret = libusb_submit_transfer(transfer);
         if (ret) {
             printf("Error resubmitting transfer %s\n", libusb_error_name(ret));
@@ -58,6 +62,13 @@ static void LIBUSB_CALL bulk_rx_cb(struct libusb_transfer *transfer) {
         }
         s->n_in_flight++;
     }
+}
+
+double get_time_sec() {
+    struct timeval tv;
+    // Use gettimeofday instead of clock to see wall time instead of cpu time
+    gettimeofday(&tv, NULL);
+    return (double)tv.tv_sec + (double)tv.tv_usec * 1e-6;
 }
 
 int main(int argc, char **argv) {
@@ -75,7 +86,7 @@ int main(int argc, char **argv) {
         return -1;
     }
 
-    libusb_device *dev = libusb_get_device(hd);
+    // libusb_device *dev = libusb_get_device(hd);
     ret = libusb_claim_interface(hd, 0);
     if (ret) {
         printf("Error claiming interface: %s\n", libusb_error_name(ret));
@@ -87,12 +98,12 @@ int main(int argc, char **argv) {
     // ret = libusb_get_config_descriptor(dev, 0, &config);
     
     ret = -1;
-    struct libusb_transfer **transfers = calloc(N_XFERS, sizeof(struct libusb_transfer *));
+    struct libusb_transfer **transfers = calloc(N_IN_FLIGHT, sizeof(struct libusb_transfer *));
     if (transfers == NULL) {
         printf("Error allocating libusb transfers\n");
         goto exit_dev;
     }
-    unsigned char **buffers = (unsigned char **) calloc(N_XFERS, sizeof(unsigned char *));
+    unsigned char **buffers = (unsigned char **) calloc(N_IN_FLIGHT, sizeof(unsigned char *));
     if (buffers == NULL) {
         printf("Error allocating buffers\n");
         goto exit_transfers;
@@ -107,7 +118,7 @@ int main(int argc, char **argv) {
     s->n_completed = 0;
     s->n_in_flight = 0;
 
-    for (int i = 0; i < N_XFERS; i++) {
+    for (int i = 0; i < N_IN_FLIGHT; i++) {
         transfers[i] = libusb_alloc_transfer(0);
 
         if (transfers[i] == NULL) {
@@ -128,7 +139,9 @@ int main(int argc, char **argv) {
     s->transfers = transfers;
     s->buffers = buffers;
 
-    for (int i = 0; i < N_XFERS && s->n_in_flight < N_ITER; i++) {
+    printf("Starting transfers\n");
+    double start = get_time_sec();
+    for (int i = 0; i < N_IN_FLIGHT && s->n_in_flight < N_XFERS; i++) {
         ret = libusb_submit_transfer(transfers[i]);
         if (ret) {
             printf("Error submitting transfer %d: %s\n", i, libusb_error_name(ret));
@@ -146,10 +159,14 @@ int main(int argc, char **argv) {
             goto exit;
         }
     }
+    double t = get_time_sec() - start;
+    size_t n_bytes = s->n_completed * XFER_SIZE;
+    printf("Completed %d / %d transfers in %f seconds\n", s->n_completed, N_XFERS, t);
+    printf("%f Gbps (%f MBps)\n", (n_bytes * 8 * 1e-9) / t, (n_bytes * 1e-6) / t);
     ret = 0;
 
 exit:
-    for (int i = 0; i < N_XFERS; i++) {
+    for (int i = 0; i < N_IN_FLIGHT; i++) {
         if (transfers[i] != NULL) {
             libusb_free_transfer(transfers[i]);
         }
