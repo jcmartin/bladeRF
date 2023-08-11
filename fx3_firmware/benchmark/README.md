@@ -26,6 +26,8 @@ This firmware provides two endpoints, a BULK-IN (0x81) for benchmarking GPIF tra
 
 These results are from a 2023 MacBook Pro (Host Controller Driver: AppleT8112USBXHCI) using `libbladeRF_test_usb_benchmark` with 4 in-flight 1 MiB transfers.
 
+For reference, the required throughput for 12-bit modes at 122.88 Msps is 2.964 Gbps for non-meta and 2.982 Gbps for meta.
+
 | Burst Length | DMA Buffer Size | DMA Buffer Count | Throughput (Gbps) |
 | ------------ | --------------- | ---------------- | ----------------- |
 | 1            | 2048            | 22               | 2.399063          |
