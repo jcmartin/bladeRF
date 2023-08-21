@@ -8,7 +8,7 @@ library work;
     
 entity twelve_bit_packer_tb is
     generic (
-        TWO_CHANNEL_EN              : std_logic := '0'; -- metadata only works w/ one channel so far
+        TWO_CHANNEL_EN              : std_logic := '1';
         -- due to need to buffer, switching does not work, so this chooses which meta mode to test
         -- TODO: find a better way to buffer / switch modes
         TEST_TWELVE_BIT_META        : boolean := true; 
@@ -245,6 +245,7 @@ begin
         variable curr_count     : unsigned(31 downto 0) := (others => '0');
         variable curr_ts        : unsigned(63 downto 0) := (others => '0');
         variable next_ts        : unsigned(63 downto 0) := (others => '0');
+        variable expected_delta : unsigned(63 downto 0) := (others => '0');
         variable temp           : unsigned(11 downto 0);
         variable buf_size       : natural;
         variable pad_size       : natural;
@@ -360,6 +361,12 @@ begin
 
         if (TEST_TWELVE_BIT_META) then
             report "Testing 12-bit meta mode";
+
+            if (TWO_CHANNEL_EN = '0') then
+                expected_delta := to_unsigned(676, expected_delta'length);
+            else
+                expected_delta := to_unsigned(338, expected_delta'length);
+            end if;
             -- Get initial timestamp
             get_meta;
             curr_ts := next_ts;
@@ -373,12 +380,18 @@ begin
 
             for x in 2 to NUM_TWELVE_BIT_META_TRIALS loop
                 get_meta;
-                assert_eq("timestamp", curr_ts, next_ts - 676);
+                assert_eq("timestamp", curr_ts, next_ts - expected_delta);
                 curr_ts := next_ts;
                 get_twelve_bit_buf;
             end loop;
         else
             report "Testing 16-bit meta mode";
+
+            if (TWO_CHANNEL_EN = '0') then
+                expected_delta := to_unsigned(508, expected_delta'length);
+            else
+                expected_delta := to_unsigned(254, expected_delta'length);
+            end if;
             twelve_bit_mode_en <= '0';
             buf_size := BUF_SIZE_SS_SIXTEEN;
             sample_fifo_rreq <= '0';
@@ -393,7 +406,7 @@ begin
 
             for x in 2 to NUM_SIXTEEN_BIT_META_TRIALS loop
                 get_meta;
-                assert_eq("timestamp", curr_ts, next_ts - 508);
+                assert_eq("timestamp", curr_ts, next_ts - expected_delta);
                 curr_ts := next_ts;
                 get_sixteen_bit_buf;
             end loop;

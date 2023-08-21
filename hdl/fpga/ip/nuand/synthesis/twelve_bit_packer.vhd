@@ -67,6 +67,8 @@ architecture arch of twelve_bit_packer is
         expected_delta      : integer range 127 to 1016;
         offset              : integer range 0 to 672;
         offset_delta        : integer range 0 to 168;
+        offset_delta_base   : integer range 84 to 168;
+        offset_delta_incr   : integer range 2 to 4;
         skip_downcount      : integer range 0 to 4;
         write_downcount     : integer range 0 to 3;
         out_data            : std_logic_vector(127 downto 0);
@@ -93,6 +95,8 @@ architecture arch of twelve_bit_packer is
         expected_delta      => 508,
         offset              => 0,
         offset_delta        => 0,
+        offset_delta_base   => 168,
+        offset_delta_incr   => 4,
         skip_downcount      => 0,
         write_downcount     => 0,
         out_data            => (others => '0'),
@@ -228,7 +232,7 @@ begin
         end case;
     end process;
 
-    -- TODO: currently 12-bit meta mode only works for SS 1-channel
+    -- TODO: currently 12-bit meta mode only works for SS
     meta_fsm_comb : process(all)
         variable discontinuous  : std_logic;
         variable prev_timestamp : unsigned(63 downto 0);
@@ -258,8 +262,16 @@ begin
                     meta_rreq_out <= '1';
                     if (twelve_bit_mode_en = '1') then
                         meta_future.next_data <= meta_data_in;
-                        meta_future.expected_delta <= 508;
                         meta_future.state <= START_12;
+                        if (dual_channel_en = '0') then
+                            meta_future.expected_delta <= 508;
+                            meta_future.offset_delta_base <= 168;
+                            meta_future.offset_delta_incr <= 4;
+                        else
+                            meta_future.expected_delta <= 254;
+                            meta_future.offset_delta_base <= 84;
+                            meta_future.offset_delta_incr <= 2;
+                        end if;
                     else
                         meta_future.curr_data <= meta_data_in;
                         meta_future.expected_delta <= expected_delta;
@@ -293,12 +305,12 @@ begin
                     meta_future.state <= READ;
                     meta_future.ret <= READ;
                     meta_future.offset <= 0;
-                    meta_future.offset_delta <= 4;
+                    meta_future.offset_delta <= meta_current.offset_delta_incr;
                     meta_future.skip_downcount <= 4;
                 end if;
 
             when READ =>
-                if (meta_current.skip_downcount = 0 and meta_current.offset_delta = 168) then
+                if (meta_current.skip_downcount = 0 and meta_current.offset_delta = meta_current.offset_delta_base) then
                     meta_future.state <= START_12;
                 elsif (meta_empty_in = '0') then
 
@@ -318,13 +330,13 @@ begin
                     if (meta_current.skip_downcount = 0) then
                         meta_future.state <= READ;
                         meta_future.skip_downcount <= 3;
-                        meta_future.offset <= 168 - meta_current.offset_delta;
-                        meta_future.offset_delta <= meta_current.offset_delta + 4;
+                        meta_future.offset <= meta_current.offset_delta_base - meta_current.offset_delta;
+                        meta_future.offset_delta <= meta_current.offset_delta + meta_current.offset_delta_incr;
                     else
                         meta_future.state <= WRITE;
                         meta_future.write_downcount <= 3;
                         meta_future.skip_downcount <= meta_current.skip_downcount - 1;
-                        meta_future.offset <= meta_current.offset + 168;
+                        meta_future.offset <= meta_current.offset + meta_current.offset_delta_base;
                     end if;
 
                 end if;
