@@ -160,11 +160,11 @@ package bladerf_p is
 
     constant TX_FIFO_WWIDTH         : natural := 32;    -- write side data width
     constant TX_FIFO_RWIDTH         : natural := 64;    -- read side data width
-    constant TX_FIFO_LENGTH         : natural := 4096;  -- samples
+    constant TX_FIFO_LENGTH         : natural := 8192;  -- samples
 
     constant RX_FIFO_WWIDTH         : natural := 64;    -- write side data width
     constant RX_FIFO_RWIDTH         : natural := 64;    -- read side data width
-    constant RX_FIFO_LENGTH         : natural := 16384; -- samples / 2
+    constant RX_FIFO_LENGTH         : natural := 12288; -- samples / 2
 
     constant ADSB_FIFO_WWIDTH       : natural := 128;   -- write side data width
     constant ADSB_FIFO_RWIDTH       : natural := 32;    -- read side data width

@@ -112,6 +112,13 @@ architecture arch of fx3_gpif_meta_tb is
     signal rx_meta_fifo             : meta_fifo_rx_t      := META_FIFO_RX_T_DEFAULT;
     signal tx_meta_fifo             : meta_fifo_tx_t      := META_FIFO_TX_T_DEFAULT;
 
+    signal rx_sample_fifo_rreq    : std_logic;
+    signal rx_sample_fifo_rdata   : std_logic_vector(31 downto 0);
+    signal rx_sample_fifo_rused   : std_logic_vector(rx_sample_fifo.rused'high+1 downto 0);
+    signal rx_meta_fifo_rreq      : std_logic;
+    signal rx_meta_fifo_rempty    : std_logic;
+    signal rx_meta_fifo_rdata     : std_logic_vector(31 downto 0);
+
     signal rx_mux_i                 : signed(15 downto 0);
     signal rx_mux_q                 : signed(15 downto 0);
     signal rx_mux_valid             : std_logic;
@@ -182,6 +189,7 @@ begin
     --  signal      rx_sample_fifo.w*        RX fifo, write side
     -- entity       U_rx_sample_fifo
     --  signal      rx_sample_fifo.r*        RX fifo, read side
+    -- entity       U_twelve_bit_packer
     -- entity       U_fx3_gpif               GPIF implementation, read side
     --  signal      fx3_gpif.gpif_out        Demuxed GPIF interface (FPGA -> FX3)
     --   process    register_gpif
@@ -220,17 +228,18 @@ begin
             tx_meta_fifo_full   => tx_meta_fifo.wfull,
             tx_meta_fifo_empty  => tx_meta_fifo.wempty,
             tx_meta_fifo_usedw  => tx_meta_fifo.wused,
-            tx_meta_fifo_data   => tx_meta_fifo.wdata,
-            rx_fifo_read        => rx_sample_fifo.rreq,
-            rx_fifo_full        => rx_sample_fifo.rfull,
-            rx_fifo_empty       => rx_sample_fifo.rempty,
-            rx_fifo_usedw       => rx_sample_fifo.rused,
-            rx_fifo_data        => rx_sample_fifo.rdata,
-            rx_meta_fifo_read   => rx_meta_fifo.rreq,
-            rx_meta_fifo_full   => rx_meta_fifo.rfull,
-            rx_meta_fifo_empty  => rx_meta_fifo.rempty,
-            rx_meta_fifo_usedr  => rx_meta_fifo.rused,
-            rx_meta_fifo_data   => rx_meta_fifo.rdata
+            
+            rx_fifo_read        =>  rx_sample_fifo_rreq,
+            rx_fifo_full        =>  rx_sample_fifo.rfull,
+            rx_fifo_empty       =>  rx_sample_fifo.rempty,
+            rx_fifo_usedw       =>  rx_sample_fifo_rused,
+            rx_fifo_data        =>  rx_sample_fifo_rdata,
+
+            rx_meta_fifo_read   =>  rx_meta_fifo_rreq,
+            rx_meta_fifo_full   =>  rx_meta_fifo.rfull,
+            rx_meta_fifo_empty  =>  rx_meta_fifo_rempty,
+            rx_meta_fifo_usedr  =>  rx_meta_fifo.rused,
+            rx_meta_fifo_data   =>  rx_meta_fifo_rdata
         );
 
     -- Discrete control signals for fx3_gpif
@@ -277,6 +286,40 @@ begin
             end if ;
         end if ;
     end process ;
+
+    U_twelve_bit_packer : entity work.twelve_bit_packer
+        generic map (
+            fifo_usedr_width => rx_sample_fifo.rused'length
+        )
+        port map (
+            clock               =>  fx3_pclk_pll,
+            reset               =>  sys_rst,
+
+            twelve_bit_mode_en  => '0',
+            eight_bit_mode_en   => '0',
+            dual_channel_en     => ENABLE_CHANNEL_0 and ENABLE_CHANNEL_1,
+            meta_en             => fx3_control.meta_enable,
+            usb_speed           => fx3_control.usb_speed,
+
+            -- sample fifo
+            sample_rreq_out     => rx_sample_fifo.rreq,
+            sample_data_in      => rx_sample_fifo.rdata,
+            sample_rused_in     => rx_sample_fifo.rused,
+            
+            -- meta fifo
+            meta_rreq_out       => rx_meta_fifo.rreq,
+            meta_empty_in       => rx_meta_fifo.rempty,
+            meta_data_in        => rx_meta_fifo.rdata,
+            
+            -- fx3 gpif controller
+            sample_rreq_in      => rx_sample_fifo_rreq,
+            sample_data_out     => rx_sample_fifo_rdata,
+            sample_rused_out    => rx_sample_fifo_rused,
+            meta_rreq_in        => rx_meta_fifo_rreq,
+            meta_empty_out      => rx_meta_fifo_rempty,
+            meta_data_out       => rx_meta_fifo_rdata
+        );
+
 
     -- Model of FX3's GPIF interface
     -- Clock domain: fx3_pclk (source)
