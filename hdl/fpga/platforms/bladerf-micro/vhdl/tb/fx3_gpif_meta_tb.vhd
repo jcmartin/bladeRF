@@ -228,6 +228,7 @@ begin
             tx_meta_fifo_full   => tx_meta_fifo.wfull,
             tx_meta_fifo_empty  => tx_meta_fifo.wempty,
             tx_meta_fifo_usedw  => tx_meta_fifo.wused,
+            tx_meta_fifo_data  => tx_meta_fifo.wdata,
             
             rx_fifo_read        =>  rx_sample_fifo_rreq,
             rx_fifo_full        =>  rx_sample_fifo.rfull,
