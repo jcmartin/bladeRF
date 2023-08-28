@@ -305,8 +305,7 @@ begin
 
             case (current.gpif_mode) is
                 when IDLE =>
-                    -- gpif_oe         <= '0';
-                    gpif_oe         <= '1';
+                    gpif_oe         <= '0';
                     gpif_out        <= (others => '1');
 
                 when RX =>
