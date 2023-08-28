@@ -98,9 +98,11 @@ begin
     done <= rx_done and tx_done;
 
     rx_sample_stream : process
-        constant BLOCK_SIZE     : natural := 512;
+        constant NUM_MSGS       : natural := 8;
+        constant BLOCK_SIZE     : natural := 512 * NUM_MSGS;
         variable count          : natural := START_COUNT;
         variable req_time       : time;
+        variable ping           : boolean := true;
     begin
         gpif_state_rx   <= IDLE;
         dma0_rx_reqx    <= '1';
@@ -120,11 +122,18 @@ begin
             dma_rx_enable <= '1';
 
             for i in 1 to BLOCKS_PER_ITERATION loop
-                dma0_rx_reqx    <= '0';
                 req_time        := now;
-                wait until rising_edge( fx3_pclk ) and dma0_rx_ack = '1';
-                wait until rising_edge( fx3_pclk );
-                dma0_rx_reqx    <= '1';
+                if ping then
+                    dma0_rx_reqx    <= '0';
+                    wait until rising_edge( fx3_pclk ) and dma0_rx_ack = '1';
+                    wait until rising_edge( fx3_pclk );
+                    dma0_rx_reqx    <= '1';
+                else
+                    dma1_rx_reqx    <= '0';
+                    wait until rising_edge( fx3_pclk ) and dma1_rx_ack = '1';
+                    wait until rising_edge( fx3_pclk );
+                    dma1_rx_reqx    <= '1';
+                end if;
 
                 report "RX iteration " & to_string(j) & " block " & to_string(i) & " delay " & to_string(now - req_time);
 
@@ -139,6 +148,7 @@ begin
                     gpif_state_rx   <= IDLE;
                     rx_data         <= (others => 'X');
                 end loop;
+                ping := not ping;
             end loop;
 
             dma_rx_enable <= '0';
