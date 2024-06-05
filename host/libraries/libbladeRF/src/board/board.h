@@ -161,6 +161,11 @@
  */
 #define BLADERF_CAP_FPGA_8BIT_SAMPLES (((uint64_t)1) << 39)
 
+/**
+ * FPGA v0.143.1 introduces support for 12bit mode.
+ */
+#define BLADERF_CAP_FPGA_12BIT_SAMPLES (((uint64_t)1) << 40)
+
 struct bladerf {
     /* Handle lock - to ensure atomic access to control and configuration
      * operations */
