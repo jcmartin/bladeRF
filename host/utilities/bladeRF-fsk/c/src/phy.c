@@ -768,7 +768,7 @@ void *phy_receive_frames(void *arg)
                     goto out;
                 }
                 //Check metadata
-                if (metadata.status & BLADERF_META_STATUS_OVERRUN){
+                if (metadata.status & BLADERF_META_STATUS_SW_OVERRUN){
                     NOTE("[PHY] %s: Got an overrun. Expected count = %u;"
                                 " actual count = %u. Skipping these samples.\n",
                                 __FUNCTION__, NUM_SAMPLES_RX, metadata.actual_count);

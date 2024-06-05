@@ -289,7 +289,7 @@ static int rx_samples(struct bladerf *dev, int16_t *samples,
                 status = 0;
             }
         } else if (status == 0) {
-            overrun = (meta.flags & BLADERF_META_STATUS_OVERRUN) != 0;
+            overrun = (meta.flags & BLADERF_META_STATUS_SW_OVERRUN) != 0;
             if (overrun) {
                 *ts += count + ts_inc;
                 retry++;

@@ -2348,10 +2348,9 @@ typedef enum {
 /**
  * Host detects a sample overrun has occurred.
  *
- * This indicates that either the host (more likely) or the FPGA is not keeping
+ * This indicates that either the host is not keeping
  * up with the incoming samples.
  */
-#define BLADERF_META_STATUS_OVERRUN (1 << 1)
 #define BLADERF_META_STATUS_SW_OVERRUN (1 << 1)
 
 /**
@@ -2514,8 +2513,8 @@ struct bladerf_metadata {
      * Output bit field to denoting the status of transmissions/receptions. API
      * calls will write this field.
      *
-     * Possible status flags include ::BLADERF_META_STATUS_OVERRUN and
-     * ::BLADERF_META_STATUS_UNDERRUN.
+     * Possible status flags include ::BLADERF_META_STATUS_SW_OVERRUN,
+     * ::BLADERF_META_STATUS_HW_OVERRUN, and ::BLADERF_META_STATUS_UNDERRUN.
      */
     uint32_t status;
 
@@ -2526,9 +2525,13 @@ struct bladerf_metadata {
      *
      * This will not be equal to the requested count in the event of a
      * discontinuity (i.e., when the status field has the
-     * ::BLADERF_META_STATUS_OVERRUN flag set). When an overrun occurs, it is
+     * ::BLADERF_META_STATUS_SW_OVERRUN flag set). When an overrun occurs, it is
      * important not to read past the number of samples specified by this value,
      * as the remaining contents of the buffer are undefined.
+     * 
+     * This is not valid in the case of an FPGA detected overrun (i.e. when 
+     * ::BLADERF_META_STATUS_SW_OVERRUN flag is set) as that indicates a
+     * discontinuity somewhere within a message.
      *
      * @note This parameter is not currently used by bladerf_sync_tx().
      */
