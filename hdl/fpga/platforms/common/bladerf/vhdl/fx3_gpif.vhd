@@ -120,6 +120,8 @@ architecture sample_shuffler of fx3_gpif is
     -- GPIF buf sizes for USB high-speed and super-speed
     constant GPIF_BUF_SIZE_HS       :   natural := 256;
     constant GPIF_BUF_SIZE_SS       :   natural := 512;
+    -- Number of messages (GPIF_BUF_SIZES) per gpif buffer
+    constant GPIF_NUM_MESSAGES_RX   :   natural := 8;
 
     type dma_handshake_t is record
         rx0             :   std_logic;
@@ -144,6 +146,7 @@ architecture sample_shuffler of fx3_gpif is
         meta_dword      :   std_logic_vector(31 downto 0);
         ack_downcount   :   integer range  0 to max(ACK_DOWNCOUNT_READ, ACK_DOWNCOUNT_WRITE);
         dma_downcount   :   integer range -1 to 65536;
+        msg_downcount   :   integer range  0 to GPIF_NUM_MESSAGES_RX;
         meta_downcount  :   integer range -1 to META_DOWNCOUNT_RESET;
         fini_downcount  :   integer range  0 to FINI_DOWNCOUNT_RESET;
         tx_ts_plus32    :   unsigned(63 downto 0);
@@ -169,6 +172,7 @@ architecture sample_shuffler of fx3_gpif is
         meta_dword      =>  (others => '0'),
         ack_downcount   =>  0,
         dma_downcount   =>  0,
+        msg_downcount   =>  0,
         meta_downcount  =>  0,
         fini_downcount  =>  0,
         tx_ts_plus32    =>  (others => '0'),
@@ -275,7 +279,7 @@ begin
             if( packet_enable = '1' ) then
                rx_fifo_enough      <= rx_meta_fifo_empty = '0';
             else
-               rx_fifo_enough      <= (unsigned(rx_fifo_full&rx_fifo_usedw) >= gpif_buf_size);
+               rx_fifo_enough      <= (unsigned(rx_fifo_full&rx_fifo_usedw) >= gpif_buf_size * GPIF_NUM_MESSAGES_RX);
             end if;
             -- Can we not fit one more block of data in RX buffer?
             rx_fifo_critical    <= (unsigned(rx_fifo_usedw) >= ((2**(rx_fifo_usedw'length-1) - gpif_buf_size)));
@@ -302,6 +306,7 @@ begin
             case (current.gpif_mode) is
                 when IDLE =>
                     gpif_oe         <= '0';
+                    gpif_out        <= (others => '1');
 
                 when RX =>
                     gpif_oe         <= '1';
@@ -311,10 +316,9 @@ begin
                     gpif_oe         <= '1';
 
                     if (current.meta_downcount = 0) then
-                        -- this overrites 16 LBSs in the flags field stored in fifo_writer
-                        gpif_out    <= rx_meta_fifo_data(31 downto 16) & x"000" &
-                            -- LSB nibble of the last word
-                            "00" & (not underrun) & underrun;
+                        -- this overrites 15 LBSs in the flags field stored in fifo_writer
+                        gpif_out    <= rx_meta_fifo_data(31 downto 15) & "000" &
+                            x"00" & "00" & (not underrun) & underrun;
                     else
                         gpif_out    <= rx_meta_fifo_data;
                     end if;
@@ -350,7 +354,10 @@ begin
             should_rx   <= false;
             should_tx   <= false;
         elsif (rising_edge(pclk)) then
-            can_rx      <= dma_rx_enable = '1' and rx_fifo_enough and (dma_req.rx0 = '1' or dma_req.rx1 = '1');
+            can_rx      <= dma_rx_enable = '1' and rx_fifo_enough and 
+                        ((current.rx_current_dma = RX0 and dma_req.rx0 = '1') or    
+                        (current.rx_current_dma = RX1 and dma_req.rx1 = '1'));
+            -- can_rx      <= dma_rx_enable = '1' and rx_fifo_enough and (dma_req.rx0 = '1' or dma_req.rx1 = '1');
             can_tx      <= dma_tx_enable = '1' and tx_fifo_enough and (dma_req.tx2 = '1' or dma_req.tx3 = '1');
             should_rx   <= can_rx and (not can_tx or rx_fifo_critical);
             should_tx   <= can_tx and not rx_fifo_critical;
@@ -415,7 +422,7 @@ begin
                         -- There is an RX to perform (sending data to FX3).
                         future.ack_downcount    <= ACK_DOWNCOUNT_READ;
                         future.dma_downcount    <= gpif_buf_size-1;
-                        future.rx_current_dma   <= RX0;
+                        future.msg_downcount    <= GPIF_NUM_MESSAGES_RX-1;
                         future.state            <= SETUP_RD;
 
                     elsif (should_tx) then
@@ -448,7 +455,8 @@ begin
 
                 -- After the first iteration (which gives time for the FIFO
                 -- to produce valid data), assert the proper ack.
-                if (current.ack_downcount /= ACK_DOWNCOUNT_READ) then
+                -- Only ack if this is the first message in the buffer
+                if (current.ack_downcount /= ACK_DOWNCOUNT_READ and current.msg_downcount = GPIF_NUM_MESSAGES_RX-1) then
                     future.dma_acks         <= acknowledge(current.rx_current_dma);
                 end if;
 
@@ -505,10 +513,18 @@ begin
 
                 -- Once the DMA countdown is done, conclude this transaction
                 if (current.dma_downcount = 0) then
-                    future.state        <= FINISHED;
+                    if (current.msg_downcount = 0) then
+                        future.state            <= FINISHED;
+                    else
+                        future.ack_downcount    <= 0;
+                        future.meta_downcount   <= META_DOWNCOUNT_RESET;
+                        future.dma_downcount    <= gpif_buf_size-1;
+                        future.msg_downcount    <= current.msg_downcount-1;
+                        future.state            <= SETUP_RD;
+                    end if;
+                else
+                    future.dma_downcount    <= max(current.dma_downcount-1, -1);
                 end if;
-
-                future.dma_downcount    <= max(current.dma_downcount-1, -1);
 
             -- =================================================================
             -- Write Handling (moving data from FX3)
@@ -612,6 +628,7 @@ begin
             -- =================================================================
             when FINISHED =>
                 -- This provides a pause between adjacent transactions.
+                -- future.state        <= IDLE;
                 future.gpif_mode        <= IDLE;
                 future.fini_downcount   <= max(current.fini_downcount-1, 0);
 
@@ -621,6 +638,13 @@ begin
 
                 if (current.fini_downcount = 0) then
                     future.state        <= IDLE;
+                    if (current.finishing_rx) then
+                        if (current.rx_current_dma = RX0) then
+                            future.rx_current_dma <= RX1;
+                        else
+                            future.rx_current_dma <= RX0;
+                        end if;
+                    end if;
                 end if;
 
         end case;

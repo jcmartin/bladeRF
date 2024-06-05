@@ -274,15 +274,15 @@ begin
                     meta_future.dma_downcount <= meta_current.dma_downcount - NUM_STREAMS;
                 end if;
 
-                if( meta_current.dma_downcount <= NUM_STREAMS ) then
-                    -- Look for 2 because of the 2 cycles passing
-                    -- through IDLE and META_WRITE after this.
-                    -- 8bit format requires an additional 2 cycle delay.
-                    if( eight_bit_mode_en = '1' ) then
-                        if( fifo_future.eight_bit_delay = '1' and fifo_future.samples_left = 0) then
-                            meta_future.state <= IDLE;
-                        end if;
-                    else
+                -- Look for 2 because of the 2 cycles passing
+                -- through IDLE and META_WRITE after this.
+                -- 8bit format requires an additional 2 cycle delay.
+                if (eight_bit_mode_en) then
+                    if (meta_current.dma_downcount <= NUM_STREAMS and fifo_future.eight_bit_delay = '1' and fifo_future.samples_left = 0) then
+                        meta_future.state <= IDLE;
+                    end if;
+                else
+                    if (meta_current.dma_downcount <= count_enabled_channels(in_sample_controls) * 2) then
                         meta_future.state <= IDLE;
                     end if;
                 end if;

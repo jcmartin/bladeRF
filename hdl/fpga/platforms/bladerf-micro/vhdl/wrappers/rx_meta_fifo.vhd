@@ -18,7 +18,7 @@ entity rx_meta_fifo is
         LPM_NUMWORDS            : natural := 32;
         LPM_SHOWAHEAD           : string  := "ON";
         LPM_WIDTH               : natural := 128;
-        LPM_WIDTH_R             : natural := 32;
+        LPM_WIDTH_R             : natural := 128;
         OVERFLOW_CHECKING       : string  := "ON";
         RDSYNC_DELAYPIPE        : natural := 5;
         READ_ACLR_SYNCH         : string  := "ON";

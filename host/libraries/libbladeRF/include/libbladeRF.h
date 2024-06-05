@@ -51,7 +51,7 @@
  *
  *  https://github.com/Nuand/bladeRF/blob/master/doc/development/versioning.md
  */
-#define LIBBLADERF_API_VERSION (0x02050000)
+#define LIBBLADERF_API_VERSION (0x02850000)
 
 #ifdef __cplusplus
 extern "C" {
@@ -2160,6 +2160,38 @@ typedef enum {
      */
     BLADERF_FORMAT_SC16_Q11_META,
 
+    // TODO: packed / unpacked lengths + details for async interface
+
+    /**
+     * This format is the same as the ::BLADERF_FORMAT_SC16_Q11 except that the
+     * underlying data transfers happen with unaligned 12 bit samples in order
+     * to increase throughput.
+     * 
+     * Currently only RX for this mode is supported.
+     * 
+     * When using bladerf_sync_rx(), the 12 bit samples will be copied and any
+     * additional padding will be skipped. In order to obtain a buffer identical
+     * to BLADERF_FORMAT_SC16_Q11, call bladerf_align_12_bit_buffer() or
+     * bladerf_align_and_deinterleave_12_bit_buffer().
+     * 
+     */
+    BLADERF_FORMAT_SC12_Q11,
+
+    /**
+     * This format is the same as ::BLADERF_FORMAT_SC12_Q11 except for the 
+     * addition of 16 byte metadata at the start, see 
+     * ::BLADERF_FORMAT_SC16_Q11_META
+     * 
+     * Currently only RX for this mode is supported.
+     * 
+     * When using bladerf_sync_rx(), the 12 bit samples will be copied and any
+     * additional padding will be skipped. In order to obtain a buffer identical
+     * to BLADERF_FORMAT_SC16_Q11, call bladerf_align_12_bit_buffer() or
+     * bladerf_align_and_deinterleave_12_bit_buffer().
+     * 
+     */
+    BLADERF_FORMAT_SC12_Q11_META,
+
     /**
      * This format is for exchanging packets containing digital payloads with
      * the FPGA. A packet is generall a digital payload, that the FPGA then
@@ -2314,12 +2346,19 @@ typedef enum {
  */
 
 /**
- * A sample overrun has occurred.
+ * Host detects a sample overrun has occurred.
  *
- * This indicates that either the host (more likely) or the FPGA is not keeping
+ * This indicates that either the host is not keeping
  * up with the incoming samples.
  */
-#define BLADERF_META_STATUS_OVERRUN (1 << 0)
+#define BLADERF_META_STATUS_SW_OVERRUN (1 << 1)
+
+/**
+ * The FPGA detects a discontinuity in metadata time stamps.
+ * 
+ * This means the samples within the message itself are probably invalid.
+ */
+#define BLADERF_META_STATUS_HW_OVERRUN (1 << 15)
 
 /**
  * A sample underrun has occurred.
@@ -2426,6 +2465,11 @@ typedef enum {
 #define BLADERF_META_FLAG_RX_HW_UNDERFLOW (1 << 0)
 
 /**
+ * This flag is asserted if the HW detects an RX overrun in 12-bit mode
+ */
+#define BLADERF_META_FLAG_RX_HW_OVERRUN (1 << 15)
+
+/**
  * This flag is asserted in bladerf_metadata.status by the hardware if mini
  * expansion IO pin 1 is asserted.
  */
@@ -2469,8 +2513,8 @@ struct bladerf_metadata {
      * Output bit field to denoting the status of transmissions/receptions. API
      * calls will write this field.
      *
-     * Possible status flags include ::BLADERF_META_STATUS_OVERRUN and
-     * ::BLADERF_META_STATUS_UNDERRUN.
+     * Possible status flags include ::BLADERF_META_STATUS_SW_OVERRUN,
+     * ::BLADERF_META_STATUS_HW_OVERRUN, and ::BLADERF_META_STATUS_UNDERRUN.
      */
     uint32_t status;
 
@@ -2481,9 +2525,13 @@ struct bladerf_metadata {
      *
      * This will not be equal to the requested count in the event of a
      * discontinuity (i.e., when the status field has the
-     * ::BLADERF_META_STATUS_OVERRUN flag set). When an overrun occurs, it is
+     * ::BLADERF_META_STATUS_SW_OVERRUN flag set). When an overrun occurs, it is
      * important not to read past the number of samples specified by this value,
      * as the remaining contents of the buffer are undefined.
+     * 
+     * This is not valid in the case of an FPGA detected overrun (i.e. when 
+     * ::BLADERF_META_STATUS_SW_OVERRUN flag is set) as that indicates a
+     * discontinuity somewhere within a message.
      *
      * @note This parameter is not currently used by bladerf_sync_tx().
      */
@@ -2575,6 +2623,62 @@ int CALL_CONV bladerf_deinterleave_stream_buffer(bladerf_channel_layout layout,
                                                  bladerf_format format,
                                                  unsigned int buffer_size,
                                                  void *samples);
+
+
+/**
+ * Aligns and sign-extends a packed 12-bit sample buffer into 16-bit samples.
+ * 
+ * This function takes a buffer created by bladerf_sync_rx() in either the
+ * ::BLADERF_FORMAT_SC12_Q11 or ::BLADERF_FORMAT_SC12_Q11_META formats and
+ * unpacks the samples into sign-extended 16-bit samples.
+ * 
+ * Note: The given buffer must be large enough to hold the inflated samples.
+ * 
+ * Note: When using the \ref FN_STREAMING_ASYNC interface the user must ensure
+ * metadata and padding is removed.
+ * 
+ * @param   buffer_size     The size of the buffer, in samples. Note that
+ *                          this is the entire buffer, not just a single
+ *                          channel.
+ * @param   samples         Buffer to process. The user is responsible for
+ *                          ensuring this buffer contains exactly
+ *                          `buffer_size` 12-bit (3 byte) samples and enough 
+ *                          room for `buffer_size` 16-bit (4 byte) samples.
+ *
+ * @return 0 on success, value from \ref RETCODES list on failure 
+ */
+API_EXPORT
+int CALL_CONV bladerf_align_12_bit_buffer(unsigned int buffer_size,
+                                          void *samples);
+
+/**
+ * Aligns and sign-extends a packed 12-bit sample buffer into 16-bit samples, 
+ * deinterleaving MIMO RX as well.
+ * 
+ * This function takes a two channel buffer created by bladerf_sync_rx() in 
+ * either the ::BLADERF_FORMAT_SC12_Q11 or ::BLADERF_FORMAT_SC12_Q11_META 
+ * formats and unpacks the samples into sign-extended 16-bit samples, 
+ * deinterleaving a 2-channel interleaved buffer similar to 
+ * bladerf_deinterleave_stream_buffer()
+ * 
+ * Note: The given buffer must be large enough to hold the inflated samples
+ * 
+ * Note: When using the \ref FN_STREAMING_ASYNC interface the user must ensure
+ * metadata and padding is removed.
+ * 
+ * @param   buffer_size     The size of the buffer, in samples. Note that
+ *                          this is the entire buffer, not just a single
+ *                          channel.
+ * @param   samples         Buffer to process. The user is responsible for
+ *                          ensuring this buffer contains exactly
+ *                          `buffer_size` 12-bit (3 byte) samples and enough 
+ *                          room for `buffer_size` 16-bit (4 byte) samples.
+ *
+ * @return 0 on success, value from \ref RETCODES list on failure 
+ */
+API_EXPORT
+int CALL_CONV bladerf_align_and_deinterleave_12_bit_buffer(
+    unsigned int buffer_size, void *samples);
 
 /** @} (End of STREAMING_FORMAT) */
 
@@ -2705,6 +2809,10 @@ int CALL_CONV bladerf_get_timestamp(struct bladerf *dev,
  *                              `num_xfers` parameter.
  * @param[in]   buffer_size     The size of the underlying stream buffers, in
  *                              samples. This value must be a multiple of 1024.
+ *                              For the 12-bit case, buffer size is calculated
+ *                              in terms of 16-bit sample sizes, and can specify
+ *                              number of actual 12-bit samples in the sync_rx
+ *                              call.
  *                              Note that samples are only transferred when a
  *                              buffer of this size is filled.
  * @param[in]   num_transfers   The number of active USB transfers that may be

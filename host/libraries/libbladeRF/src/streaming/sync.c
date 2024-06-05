@@ -36,6 +36,7 @@
 #include "sync_worker.h"
 #include "metadata.h"
 
+#include "backend/usb/usb.h"
 #include "board/board.h"
 #include "helpers/timeout.h"
 #include "helpers/have_cap.h"
@@ -91,6 +92,9 @@ static inline void dump_buf_states(struct bladerf_sync *s)
         case SYNC_STATE_USING_BUFFER:
             statestr = "USING_BUFFER";
             break;
+        case SYNC_STATE_USING_BUFFER_PAD:
+            statestr = "USING_BUFFER_PAD";
+            break;
         case SYNC_STATE_USING_BUFFER_META:
             statestr = "USING_BUFFER_META";
             break;
@@ -112,18 +116,17 @@ static inline size_t samples2bytes(struct bladerf_sync *s, size_t n) {
     return s->stream_config.bytes_per_sample * n;
 }
 
-static inline unsigned int msg_per_buf(size_t msg_size, size_t buf_size,
-                                       size_t bytes_per_sample)
-{
-    size_t n = buf_size / (msg_size / bytes_per_sample);
+static inline unsigned int msg_per_buf(size_t msg_size, size_t buf_size) {
+    size_t n = buf_size / msg_size;
     assert(n <= UINT_MAX);
     return (unsigned int) n;
 }
 
 static inline unsigned int samples_per_msg(size_t msg_size,
-                                           size_t bytes_per_sample)
+                                           size_t bytes_per_sample,
+                                           size_t msg_padding)
 {
-    size_t n = (msg_size - METADATA_HEADER_SIZE) / bytes_per_sample;
+    size_t n = (msg_size - msg_padding) / bytes_per_sample;
     assert(n <= UINT_MAX);
     return (unsigned int) n;
 }
@@ -140,7 +143,7 @@ int sync_init(struct bladerf_sync *sync,
 
 {
     int status = 0;
-    size_t i, bytes_per_sample;
+    size_t i, bytes_per_sample, buffer_size_bytes, msg_padding;
 
     if (num_transfers >= num_buffers) {
         return BLADERF_ERR_INVAL;
@@ -168,6 +171,20 @@ int sync_init(struct bladerf_sync *sync,
         }
     }
 
+    if (format == BLADERF_FORMAT_SC12_Q11_META || format == BLADERF_FORMAT_SC12_Q11) {
+        if (!have_cap_dev(dev, BLADERF_CAP_FPGA_12BIT_SAMPLES)) {
+            log_error("FPGA does not support 12bit mode. "
+                      "Upgrade to at least FPGA version 0.143.1.\n");
+            return BLADERF_ERR_UNSUPPORTED;
+        }
+
+        if ((layout & BLADERF_DIRECTION_MASK) == BLADERF_TX) {
+            log_error("TX for 12-bit mode is not supported");
+            return BLADERF_ERR_UNSUPPORTED;
+        }
+    }
+
+    msg_padding = 0;
     switch (format) {
         case BLADERF_FORMAT_SC8_Q7:
         case BLADERF_FORMAT_SC8_Q7_META:
@@ -179,15 +196,30 @@ int sync_init(struct bladerf_sync *sync,
         case BLADERF_FORMAT_PACKET_META:
             bytes_per_sample = 4;
             break;
+        
+        case BLADERF_FORMAT_SC12_Q11:
+            bytes_per_sample = 3;
+            msg_padding = msg_size == USB_MSG_SIZE_SS ? 8 : 4;
+            break;
+
+        case BLADERF_FORMAT_SC12_Q11_META:
+            bytes_per_sample = 3;
+            msg_padding = msg_size == USB_MSG_SIZE_SS ? 4 : 0;
+            break;
 
         default:
             log_debug("Invalid format value: %d\n", format);
             return BLADERF_ERR_INVAL;
     }
 
+    buffer_size_bytes = bytes_per_sample * buffer_size;
+    // Treat buffer_size as number of 16-bit samples in the 12-bit case
+    if (format == BLADERF_FORMAT_SC12_Q11 || format == BLADERF_FORMAT_SC12_Q11_META)
+        buffer_size_bytes = 4 * buffer_size;
     /* bladeRF GPIF DMA requirement */
-    if ((bytes_per_sample * buffer_size) % 4096 != 0) {
-        return BLADERF_ERR_INVAL;
+    // SC12_Q11 pads each message
+    if (buffer_size_bytes % 4096 != 0) {
+            return BLADERF_ERR_INVAL;
     }
 
     /* Deinitialize sync handle if it's initialized */
@@ -210,17 +242,21 @@ int sync_init(struct bladerf_sync *sync,
     sync->buf_mgmt.num_buffers = num_buffers;
     sync->buf_mgmt.resubmit_count = 0;
 
+    // TODO: consolidate both meta and non-meta state info
     sync->stream_config.layout = layout;
     sync->stream_config.format = format;
-    sync->stream_config.samples_per_buffer = (unsigned int)buffer_size;
+    sync->stream_config.msg_padding = msg_padding;
+    sync->stream_config.samples_per_msg = samples_per_msg(msg_size, bytes_per_sample, msg_padding);
+    sync->stream_config.msg_per_buffer = msg_per_buf(msg_size, buffer_size_bytes);
+    sync->stream_config.samples_per_buffer = sync->stream_config.samples_per_msg * sync->stream_config.msg_per_buffer;
     sync->stream_config.num_xfers = num_transfers;
     sync->stream_config.timeout_ms = stream_timeout;
     sync->stream_config.bytes_per_sample = bytes_per_sample;
 
     sync->meta.state = SYNC_META_STATE_HEADER;
     sync->meta.msg_size = msg_size;
-    sync->meta.msg_per_buf = msg_per_buf(msg_size, buffer_size, bytes_per_sample);
-    sync->meta.samples_per_msg = samples_per_msg(msg_size, bytes_per_sample);
+    sync->meta.msg_per_buf = msg_per_buf(msg_size, buffer_size_bytes);
+    sync->meta.samples_per_msg = samples_per_msg(msg_size, bytes_per_sample, msg_padding + METADATA_HEADER_SIZE);
 
     log_verbose("%s: Buffer size (in bytes): %u\n",
                 __FUNCTION__, buffer_size * bytes_per_sample);
@@ -284,7 +320,7 @@ int sync_init(struct bladerf_sync *sync,
             break;
     }
 
-    status = sync_worker_init(sync);
+    status = sync_worker_init(sync, buffer_size);
     if (status < 0) {
         goto error;
     }
@@ -363,7 +399,11 @@ static int wait_for_buffer(struct buffer_mgmt *b,
 /* Returns # of samples left in a message (SC16Q11 mode only) */
 static inline unsigned int left_in_msg(struct bladerf_sync *s)
 {
-    size_t ret = s->meta.samples_per_msg - s->meta.curr_msg_off;
+    size_t ret;
+    if (s->state == SYNC_STATE_USING_BUFFER_PAD)
+        ret = s->stream_config.samples_per_msg - s->meta.curr_msg_off;
+    else
+        ret = s->meta.samples_per_msg - s->meta.curr_msg_off;
     assert(ret <= UINT_MAX);
 
     return (unsigned int) ret;
@@ -411,6 +451,7 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
 
     if (s->stream_config.format == BLADERF_FORMAT_SC16_Q11_META ||
           s->stream_config.format == BLADERF_FORMAT_SC8_Q7_META ||
+          s->stream_config.format == BLADERF_FORMAT_SC12_Q11_META ||
           s->stream_config.format == BLADERF_FORMAT_PACKET_META) {
         if (user_meta == NULL) {
             log_debug("NULL metadata pointer passed to %s\n", __FUNCTION__);
@@ -525,8 +566,15 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                         s->state = SYNC_STATE_USING_BUFFER;
                         break;
 
+                    case BLADERF_FORMAT_SC12_Q11:
+                        s->state = SYNC_STATE_USING_BUFFER_PAD;
+                        s->meta.curr_msg_off = 0;
+                        s->meta.msg_num = 0;
+                        break;
+
                     case BLADERF_FORMAT_SC16_Q11_META:
                     case BLADERF_FORMAT_SC8_Q7_META:
+                    case BLADERF_FORMAT_SC12_Q11_META:
                         s->state = SYNC_STATE_USING_BUFFER_META;
                         s->meta.curr_msg_off = 0;
                         s->meta.msg_num = 0;
@@ -577,7 +625,46 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                 break;
 
 
-            case SYNC_STATE_USING_BUFFER_META: /* SC16Q11 buffers w/ metadata */
+            case SYNC_STATE_USING_BUFFER_PAD: /* SC12Q11 buffers w/o metadata */
+                MUTEX_LOCK(&b->lock);
+                buf_src = (uint8_t *)b->buffers[b->cons_i];
+                s->meta.curr_msg = buf_src + s->meta.msg_size * s->meta.msg_num;
+                // Copies samples in units of messages
+                samples_to_copy = uint_min(num_samples - samples_returned,
+                                          left_in_msg(s));
+
+                memcpy(samples_dest + samples2bytes(s, samples_returned),
+                       s->meta.curr_msg +
+                           samples2bytes(s, s->meta.curr_msg_off),
+                       samples2bytes(s, samples_to_copy));
+
+                log_verbose("Copied %u samples from buffer %u, message %u\n",
+                    samples_to_copy, b->cons_i, s->meta.msg_num
+                );
+
+                samples_returned += samples_to_copy;
+                s->meta.curr_msg_off += samples_to_copy;
+
+                if (left_in_msg(s) == 0) {
+                    assert(s->meta.curr_msg_off == s->stream_config.samples_per_msg);
+
+                    s->state = SYNC_STATE_USING_BUFFER_PAD;
+                    s->meta.curr_msg_off = 0;
+                    s->meta.msg_num++;
+
+                    if (s->meta.msg_num >= s->meta.msg_per_buf) {
+                        assert(s->meta.msg_num == s->meta.msg_per_buf);
+                        advance_rx_buffer(b);
+                        s->meta.msg_num = 0;
+                        s->state        = SYNC_STATE_WAIT_FOR_BUFFER;
+                    }
+                }
+
+                MUTEX_UNLOCK(&b->lock);
+                break;
+
+
+            case SYNC_STATE_USING_BUFFER_META: /* SC16Q11 + SC12Q11 buffers w/ metadata */
                 MUTEX_LOCK(&b->lock);
 
                 switch (s->meta.state) {
@@ -599,23 +686,56 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                         user_meta->status |= s->meta.msg_flags &
                            (BLADERF_META_FLAG_RX_HW_UNDERFLOW |
                               BLADERF_META_FLAG_RX_HW_MINIEXP1 |
-                              BLADERF_META_FLAG_RX_HW_MINIEXP2);
+                              BLADERF_META_FLAG_RX_HW_MINIEXP2 |
+                              BLADERF_META_FLAG_RX_HW_OVERRUN);
 
                         s->meta.curr_msg_off = 0;
 
-                        /* We've encountered a discontinuity and need to return
-                         * what we have so far, setting the status flags */
-                        if (copied_data &&
-                            s->meta.msg_timestamp != s->meta.curr_timestamp) {
+                        if (s->meta.msg_flags &
+                            BLADERF_META_FLAG_RX_HW_OVERRUN) {
+                            /* Current message contains a discontinuity within
+                             * it and is not valid so skip, seeking to the first
+                             * valid message if nothing copied yet, otherwise
+                             * returning early */
 
-                            user_meta->status |= BLADERF_META_STATUS_OVERRUN;
+                            log_debug(
+                                "FPGA detected invalid message @ buffer "
+                                "%u, message %u, t=%llu, skipping...\n",
+                                b->cons_i, s->meta.msg_num,
+                                (unsigned long long)s->meta.msg_timestamp);
+
+                            s->meta.msg_num++;
+                            s->meta.state = SYNC_META_STATE_HEADER;
+
+                            if (s->meta.msg_num >= s->meta.msg_per_buf) {
+                                assert(s->meta.msg_num == s->meta.msg_per_buf);
+                                advance_rx_buffer(b);
+                                s->meta.msg_num = 0;
+                                s->state        = SYNC_STATE_WAIT_FOR_BUFFER;
+                            }
+
+                            if (copied_data)
+                                exit_early = true;
+                            else
+                                user_meta->status = 0;
+
+                            break;
+
+                        } else if (copied_data &&
+                            s->meta.msg_timestamp != s->meta.curr_timestamp) {
+                            /* We've encountered a discontinuity and need to
+                             * return what we have so far, setting the status
+                             * flags */
+
+                            user_meta->status |= BLADERF_META_STATUS_SW_OVERRUN;
                             exit_early = true;
                             log_debug("Sample discontinuity detected @ "
                                       "buffer %u, message %u: Expected t=%llu, "
-                                      "got t=%llu\n",
+                                      "got t=%llu (delta = %llu)\n",
                                       b->cons_i, s->meta.msg_num,
                                       (unsigned long long)s->meta.curr_timestamp,
-                                      (unsigned long long)s->meta.msg_timestamp);
+                                      (unsigned long long)s->meta.msg_timestamp,
+                                      s->meta.msg_timestamp - s->meta.curr_timestamp);
 
                         } else {
                             log_verbose("Got header for message %u: "
@@ -674,9 +794,9 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                             copied_data = true;
 
                             if (s->stream_config.layout == BLADERF_RX_X2)
-                               s->meta.curr_timestamp += samples_to_copy / 2;
+                                s->meta.curr_timestamp += samples_to_copy / 2;
                             else
-                               s->meta.curr_timestamp += samples_to_copy;
+                                s->meta.curr_timestamp += samples_to_copy;
 
                             /* We've begun copying samples, so our target will
                              * just keep tracking the current timestamp. */
@@ -710,7 +830,12 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                             /* Account for current position in buffer */
                             left_in_buffer -= s->meta.curr_msg_off;
 
-                            if (time_delta >= left_in_buffer) {
+                            uint64_t sample_delta = time_delta;
+                            
+                            if (s->stream_config.layout == BLADERF_RX_X2)
+                                sample_delta *= 2;
+
+                            if (sample_delta >= left_in_buffer) {
                                 /* Discard the remainder of this buffer */
                                 advance_rx_buffer(b);
                                 s->state = SYNC_STATE_WAIT_FOR_BUFFER;
@@ -719,10 +844,10 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                                 log_verbose("%s: Discarding rest of buffer.\n",
                                             __FUNCTION__);
 
-                            } else if (time_delta <= left_in_msg(s)) {
+                            } else if (sample_delta <= left_in_msg(s)) {
                                 /* Fast forward within the current message */
-                                assert(time_delta <= SIZE_MAX);
-                                s->meta.curr_msg_off += (size_t) time_delta;
+                                assert(sample_delta <= SIZE_MAX);
+                                s->meta.curr_msg_off += (size_t) sample_delta;
                                 s->meta.curr_timestamp += time_delta;
 
                                 log_verbose("%s: Seeking within message (t=%llu)\n",
@@ -731,7 +856,7 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                             } else {
                                 s->meta.state = SYNC_META_STATE_HEADER;
 
-                                s->meta.msg_num += timestamp_to_msg(s, time_delta);
+                                s->meta.msg_num += timestamp_to_msg(s, sample_delta);
 
                                 log_verbose("%s: Seeking to message %u.\n",
                                             __FUNCTION__, s->meta.msg_num);
@@ -1092,6 +1217,11 @@ int sync_tx(struct bladerf_sync *s,
                 }
 
                 MUTEX_UNLOCK(&b->lock);
+                break;
+
+            case SYNC_STATE_USING_BUFFER_PAD:
+                assert(!"Invalid state: 12-bit tx not implemented");
+                status = BLADERF_ERR_UNEXPECTED;
                 break;
 
             case SYNC_STATE_USING_BUFFER_META: /* SC16Q11 buffers w/ metadata */

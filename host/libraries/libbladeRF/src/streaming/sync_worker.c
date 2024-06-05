@@ -189,7 +189,7 @@ static void *tx_callback(struct bladerf *dev,
     return ret;
 }
 
-int sync_worker_init(struct bladerf_sync *s)
+int sync_worker_init(struct bladerf_sync *s, size_t buf_size)
 {
     int status = 0;
     s->worker  = (struct sync_worker *)calloc(1, sizeof(*s->worker));
@@ -210,7 +210,7 @@ int sync_worker_init(struct bladerf_sync *s)
     status = async_init_stream(
         &s->worker->stream, s->dev, s->worker->cb, &s->buf_mgmt.buffers,
         s->buf_mgmt.num_buffers, s->stream_config.format,
-        s->stream_config.samples_per_buffer, s->stream_config.num_xfers, s);
+        buf_size, s->stream_config.num_xfers, s);
 
     if (status != 0) {
         log_debug("%s worker: Failed to init stream: %s\n", worker2str(s),

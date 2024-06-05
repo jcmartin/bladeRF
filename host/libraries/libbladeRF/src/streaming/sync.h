@@ -34,7 +34,10 @@ struct stream_config {
     bladerf_format format;
     bladerf_channel_layout layout;
 
+    unsigned int samples_per_msg;
+    unsigned int msg_per_buffer;
     unsigned int samples_per_buffer;
+    unsigned int msg_padding;
     unsigned int num_xfers;
     unsigned int timeout_ms;
 
@@ -100,6 +103,7 @@ typedef enum {
     SYNC_STATE_WAIT_FOR_BUFFER,
     SYNC_STATE_BUFFER_READY,
     SYNC_STATE_USING_BUFFER,
+    SYNC_STATE_USING_BUFFER_PAD,
     SYNC_STATE_USING_PACKET_META,
     SYNC_STATE_USING_BUFFER_META
 } sync_state;

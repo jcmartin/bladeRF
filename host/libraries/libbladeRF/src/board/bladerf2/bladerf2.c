@@ -2140,8 +2140,7 @@ static int bladerf2_sync_config(struct bladerf *dev,
 
     if (dev->feature == BLADERF_FEATURE_OVERSAMPLE
         && (format == BLADERF_FORMAT_SC16_Q11 || format == BLADERF_FORMAT_SC16_Q11_META)) {
-        log_error("16bit format unsupported with OVERSAMPLE feature enabled\n");
-        return BLADERF_ERR_UNSUPPORTED;
+        log_warning("16bit format unsupported with OVERSAMPLE feature enabled\n");
     }
 
     switch (layout) {

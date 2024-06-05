@@ -65,6 +65,14 @@ architecture hosted_bladerf of bladerf is
 
     signal tx_sample_fifo         : tx_fifo_t       := TX_FIFO_T_DEFAULT;
     signal rx_sample_fifo         : rx_fifo_t       := RX_FIFO_T_DEFAULT;
+    -- Inputs to GPIF controller
+    signal rx_sample_fifo_rreq    : std_logic;
+    signal rx_sample_fifo_rdata   : std_logic_vector(31 downto 0);
+    signal rx_sample_fifo_rused   : std_logic_vector(rx_sample_fifo.rused'high+1 downto 0);
+    signal rx_meta_fifo_rreq      : std_logic;
+    signal rx_meta_fifo_rempty    : std_logic;
+    signal rx_meta_fifo_rdata     : std_logic_vector(31 downto 0);
+
     signal tx_loopback_fifo       : loopback_fifo_t := LOOPBACK_FIFO_T_DEFAULT;
 
     signal tx_meta_fifo           : meta_fifo_tx_t := META_FIFO_TX_T_DEFAULT;
@@ -90,6 +98,10 @@ architecture hosted_bladerf of bladerf is
     signal eightbit_en_pclk       : std_logic;
     signal eightbit_en_tx         : std_logic;
     signal eightbit_en_rx         : std_logic;
+
+    signal twelvebit_en_pclk      : std_logic;
+    signal dual_channel_en_pclk   : std_logic;
+    signal dual_channel_en_rx     : std_logic;
 
     signal packet_en_pclk         : std_logic;
     signal packet_en_tx           : std_logic;
@@ -262,6 +274,40 @@ begin
     -- ========================================================================
     -- FX3 GPIF
     -- ========================================================================
+    
+    -- Either pack samples into 12 bits or pass through 64 -> 32
+    U_twelve_bit_packer : entity work.twelve_bit_packer
+        generic map (
+            FIFO_USEDR_WIDTH => rx_sample_fifo.rused'length
+        )
+        port map (
+            clock               =>  fx3_pclk_pll,
+            reset               =>  sys_reset_pclk or not rx_enable_pclk,
+
+            twelve_bit_mode_en  => twelvebit_en_pclk,
+            eight_bit_mode_en   => eightbit_en_pclk,
+            dual_channel_en     => dual_channel_en_pclk,
+            meta_en             => meta_en_pclk,
+            usb_speed           => usb_speed_pclk,
+
+            -- Sample FIFO
+            sample_rreq_out     => rx_sample_fifo.rreq,
+            sample_data_in      => rx_sample_fifo.rdata,
+            sample_rused_in     => rx_sample_fifo.rused,
+            
+            -- Meta FIFO
+            meta_rreq_out       => rx_meta_fifo.rreq,
+            meta_empty_in       => rx_meta_fifo.rempty,
+            meta_data_in        => rx_meta_fifo.rdata,
+            
+            -- FX3 GPIF controller
+            sample_rreq_in      => rx_sample_fifo_rreq,
+            sample_data_out     => rx_sample_fifo_rdata,
+            sample_rused_out    => rx_sample_fifo_rused,
+            meta_rreq_in        => rx_meta_fifo_rreq,
+            meta_empty_out      => rx_meta_fifo_rempty,
+            meta_data_out       => rx_meta_fifo_rdata
+        );
 
     -- FX3 GPIF
     U_fx3_gpif : entity work.fx3_gpif
@@ -296,17 +342,17 @@ begin
             tx_meta_fifo_usedw  =>  tx_meta_fifo.wused,
             tx_meta_fifo_data   =>  tx_meta_fifo.wdata,
 
-            rx_fifo_read        =>  rx_sample_fifo.rreq,
+            rx_fifo_read        =>  rx_sample_fifo_rreq,
             rx_fifo_full        =>  rx_sample_fifo.rfull,
             rx_fifo_empty       =>  rx_sample_fifo.rempty,
-            rx_fifo_usedw       =>  rx_sample_fifo.rused,
-            rx_fifo_data        =>  rx_sample_fifo.rdata,
+            rx_fifo_usedw       =>  rx_sample_fifo_rused,
+            rx_fifo_data        =>  rx_sample_fifo_rdata,
 
-            rx_meta_fifo_read   =>  rx_meta_fifo.rreq,
+            rx_meta_fifo_read   =>  rx_meta_fifo_rreq,
             rx_meta_fifo_full   =>  rx_meta_fifo.rfull,
-            rx_meta_fifo_empty  =>  rx_meta_fifo.rempty,
+            rx_meta_fifo_empty  =>  rx_meta_fifo_rempty,
             rx_meta_fifo_usedr  =>  rx_meta_fifo.rused,
-            rx_meta_fifo_data   =>  rx_meta_fifo.rdata
+            rx_meta_fifo_data   =>  rx_meta_fifo_rdata
         );
 
     -- FX3 GPIF bidirectional signal control
@@ -841,6 +887,30 @@ begin
             clock               =>  tx_clock,
             async               =>  nios_gpio.o.eightbit_en,
             sync                =>  eightbit_en_tx
+        );
+
+    U_sync_twelvebit_en_pclk : entity work.synchronizer
+        generic map (
+            RESET_LEVEL         =>  '0'
+        )
+        port map (
+            reset               =>  '0',
+            clock               =>  fx3_pclk_pll,
+            async               =>  nios_gpio.o.twelvebit_en,
+            sync                =>  twelvebit_en_pclk
+        );
+
+
+    dual_channel_en_rx <= '1' when count_enabled_channels(adc_controls) = 2 else '0';
+    U_sync_dual_channel_en_pclk : entity work.synchronizer
+        generic map (
+            RESET_LEVEL         => '0'
+        )
+        port map (
+            reset               => '0',
+            clock               => fx3_pclk_pll,
+            async               => dual_channel_en_rx,
+            sync                => dual_channel_en_pclk
         );
 
     U_sync_packet_en_pclk : entity work.synchronizer

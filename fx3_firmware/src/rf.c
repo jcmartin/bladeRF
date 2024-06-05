@@ -31,8 +31,8 @@
 static CyU3PDmaChannel glChHandlebladeRFUtoUART;   /* DMA Channel for U2P transfers */
 static CyU3PDmaChannel glChHandlebladeRFUARTtoU;   /* DMA Channel for U2P transfers */
 
-static CyU3PDmaChannel glChHandleUtoP;
-static CyU3PDmaChannel glChHandlePtoU;
+static CyU3PDmaChannel      glChHandleUtoP;
+static CyU3PDmaMultiChannel glChHandlePtoU;
 
 static int loopback = 0;
 static int loopback_when_created;
@@ -230,6 +230,7 @@ static void NuandRFLinkStart(void)
     uint16_t size = 0;
     CyU3PEpConfig_t epCfg;
     CyU3PDmaChannelConfig_t dmaCfg;
+    CyU3PDmaMultiChannelConfig_t dmaRxCfg;
     CyU3PReturnStatus_t apiRetStatus = CY_U3P_SUCCESS;
     CyU3PUSBSpeed_t usbSpeed = CyU3PUsbGetSpeed();
 
@@ -271,9 +272,14 @@ static void NuandRFLinkStart(void)
     CyU3PMemSet ((uint8_t *)&epCfg, 0, sizeof (epCfg));
     epCfg.enable = CyTrue;
     epCfg.epType = CY_U3P_USB_EP_BULK;
-    epCfg.burstLen = (usbSpeed == CY_U3P_SUPER_SPEED ? 15 : 1);
+    epCfg.burstLen = 1;
     epCfg.streams = 0;
     epCfg.pcktSize = size;
+
+    if (usbSpeed == CY_U3P_SUPER_SPEED) {
+        epCfg.burstLen = 16;
+        CyU3PUsbEPSetBurstMode(BLADE_RF_SAMPLE_EP_CONSUMER, CyTrue);
+    }
 
     /* Producer endpoint configuration */
     apiRetStatus = CyU3PSetEpConfig(BLADE_RF_SAMPLE_EP_PRODUCER, &epCfg);
@@ -290,8 +296,8 @@ static void NuandRFLinkStart(void)
     }
 
     CyU3PMemSet((uint8_t *)&dmaCfg, 0, sizeof(dmaCfg));
-    dmaCfg.size  = size * 2;
-    dmaCfg.count = 22;
+    dmaCfg.size  = size * TX_DMA_BUF_SIZE_MULTIPLIER;
+    dmaCfg.count = TX_DMA_BUF_COUNT;
     dmaCfg.prodSckId = BLADE_RF_SAMPLE_EP_PRODUCER_USB_SOCKET;
     dmaCfg.consSckId = CY_U3P_PIB_SOCKET_3;
     dmaCfg.dmaMode = CY_U3P_DMA_MODE_BYTE;
@@ -317,9 +323,23 @@ static void NuandRFLinkStart(void)
     }
 
     if (!loopback) {
-        dmaCfg.prodSckId = CY_U3P_PIB_SOCKET_0;
-        dmaCfg.consSckId = BLADE_RF_SAMPLE_EP_CONSUMER_USB_SOCKET;
-        apiRetStatus = CyU3PDmaChannelCreate(&glChHandlePtoU, CY_U3P_DMA_TYPE_AUTO, &dmaCfg);
+        CyU3PMemSet((uint8_t *)&dmaRxCfg, 0, sizeof(dmaRxCfg));
+        dmaRxCfg.size  = size * RX_DMA_BUF_SIZE_MULTIPLIER;
+        dmaRxCfg.count = RX_DMA_BUF_COUNT;
+        dmaRxCfg.validSckCount = 2;
+        dmaRxCfg.prodSckId[0] = CY_U3P_PIB_SOCKET_0;
+        dmaRxCfg.prodSckId[1] = CY_U3P_PIB_SOCKET_1;
+        dmaRxCfg.consSckId[0] = BLADE_RF_SAMPLE_EP_CONSUMER_USB_SOCKET;
+        dmaRxCfg.dmaMode = CY_U3P_DMA_MODE_BYTE;
+        dmaRxCfg.notification = 0;
+        dmaRxCfg.cb = 0;
+        dmaRxCfg.prodHeader = 0;
+        dmaRxCfg.prodFooter = 0;
+        dmaRxCfg.consHeader = 0;
+        dmaRxCfg.prodAvailCount = 0;
+
+        apiRetStatus = CyU3PDmaMultiChannelCreate(&glChHandlePtoU, 
+            CY_U3P_DMA_TYPE_AUTO_MANY_TO_ONE, &dmaRxCfg);
         if (apiRetStatus != CY_U3P_SUCCESS) {
             LOG_ERROR(apiRetStatus);
             CyFxAppErrorHandler(apiRetStatus);
@@ -339,7 +359,7 @@ static void NuandRFLinkStart(void)
     }
 
     if (!loopback) {
-        apiRetStatus = CyU3PDmaChannelSetXfer (&glChHandlePtoU, BLADE_DMA_TX_SIZE);
+        apiRetStatus = CyU3PDmaMultiChannelSetXfer (&glChHandlePtoU, BLADE_DMA_TX_SIZE, 0);
         if (apiRetStatus != CY_U3P_SUCCESS) {
             LOG_ERROR(apiRetStatus);
             CyFxAppErrorHandler(apiRetStatus);
@@ -370,7 +390,7 @@ static void NuandRFLinkStop (void)
     /* Destroy the channels */
     CyU3PDmaChannelDestroy(&glChHandleUtoP);
     if (!loopback_when_created)
-        CyU3PDmaChannelDestroy(&glChHandlePtoU);
+        CyU3PDmaMultiChannelDestroy(&glChHandlePtoU);
 
     /* Disable endpoints. */
     CyU3PMemSet ((uint8_t *)&epCfg, 0, sizeof (epCfg));
@@ -421,7 +441,7 @@ CyU3PReturnStatus_t NuandRFLinkResetEndpoint(uint8_t endpoint)
 
         case BLADE_RF_SAMPLE_EP_CONSUMER:
             if (!loopback_when_created) {
-                status = ClearDMAChannel(endpoint, &glChHandlePtoU,
+                status = ClearDMAMultiChannel(endpoint, &glChHandlePtoU,
                                          BLADE_DMA_TX_SIZE);
             } else {
                 status = CY_U3P_SUCCESS;

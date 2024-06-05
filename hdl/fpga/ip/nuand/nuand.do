@@ -29,6 +29,7 @@ proc compile_nuand { root platform } {
         vcom -work nuand -2008 [file join $root ../../platforms/${platform}/vhdl/wrappers/tx_fifo.vhd]
         vcom -work nuand -2008 [file join $root ../../platforms/${platform}/vhdl/wrappers/rx_meta_fifo.vhd]
         vcom -work nuand -2008 [file join $root ../../platforms/${platform}/vhdl/wrappers/tx_meta_fifo.vhd]
+        vcom -work nuand -2008 [file join $root ../../platforms/${platform}/vhdl/bladerf_p.vhd]
     } else {
         # Don't error out because it might not matter...
         puts "WARNING: Unknown platform: ${platform}"
@@ -51,6 +52,8 @@ proc compile_nuand { root platform } {
     vcom -work nuand -2008 [file join $root ./synthesis/fifo_readwrite_p.vhd]
     vcom -work nuand -2008 [file join $root ./synthesis/fifo_reader.vhd]
     vcom -work nuand -2008 [file join $root ./synthesis/fifo_writer.vhd]
+    vcom -work nuand -2008 [file join $root ./synthesis/tb/fifo_writer_tb.vhd]
+    vcom -work nuand -2008 [file join $root ./synthesis/twelve_bit_packer.vhd]
 
     vcom -work nuand -2008 [file join $root ./trigger/trigger.vhd]
     vcom -work nuand -2008 [file join $root ./synthesis/signal_generator.vhd]

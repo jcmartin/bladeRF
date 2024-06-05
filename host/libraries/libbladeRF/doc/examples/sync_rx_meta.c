@@ -149,7 +149,7 @@ int sync_rx_meta_now_example(struct bladerf *dev,
         if (status != 0) {
             fprintf(stderr, "RX \"now\" failed: %s\n\n",
                     bladerf_strerror(status));
-        } else if (meta.status & BLADERF_META_STATUS_OVERRUN) {
+        } else if (meta.status & BLADERF_META_STATUS_SW_OVERRUN) {
             fprintf(stderr, "Overrun detected. %u valid samples were read.\n",
                     meta.actual_count);
         } else {
@@ -214,7 +214,7 @@ int sync_rx_meta_sched_example(struct bladerf *dev,
         if (status != 0) {
             fprintf(stderr, "Scheduled RX failed: %s\n\n",
                     bladerf_strerror(status));
-        } else if (meta.status & BLADERF_META_STATUS_OVERRUN) {
+        } else if (meta.status & BLADERF_META_STATUS_SW_OVERRUN) {
             fprintf(stderr, "Overrun detected in scheduled RX. "
                             "%u valid samples were read.\n\n",
                     meta.actual_count);

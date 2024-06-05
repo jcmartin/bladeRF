@@ -137,7 +137,7 @@ void *tx_callback(struct bladerf *dev,
     size_t i;
 
     if (meta->status &
-        (BLADERF_META_STATUS_OVERRUN | BLADERF_META_STATUS_UNDERRUN)) {
+        (BLADERF_META_STATUS_SW_OVERRUN | BLADERF_META_STATUS_UNDERRUN)) {
         log_critical("TX over/under flow detected, stopping.\n");
         return BLADERF_STREAM_SHUTDOWN;
     }
@@ -269,7 +269,7 @@ void *rx_callback(struct bladerf *dev,
     size_t skip_by = (LOOPBACK_RFIC == state->lb_mode) ? 4 : 2;
 
     if (meta->status &
-        (BLADERF_META_STATUS_OVERRUN | BLADERF_META_STATUS_UNDERRUN)) {
+        (BLADERF_META_STATUS_SW_OVERRUN | BLADERF_META_STATUS_UNDERRUN)) {
         log_error("RX over/under flow detected, stopping.\n");
         return BLADERF_STREAM_SHUTDOWN;
     }

@@ -109,6 +109,14 @@ int async_init_stream(struct bladerf_stream **stream,
         }
     }
 
+    if (format == BLADERF_FORMAT_SC12_Q11_META || format == BLADERF_FORMAT_SC12_Q11) {
+        if (!have_cap_dev(dev, BLADERF_CAP_FPGA_12BIT_SAMPLES)) {
+            log_error("FPGA does not support 12bit mode. "
+                      "Upgrade to at least FPGA version 0.143.1.\n");
+            return BLADERF_ERR_UNSUPPORTED;
+        }
+    }
+
     switch(format) {
         case BLADERF_FORMAT_SC8_Q7:
         case BLADERF_FORMAT_SC8_Q7_META:
@@ -117,6 +125,8 @@ int async_init_stream(struct bladerf_stream **stream,
 
         case BLADERF_FORMAT_SC16_Q11:
         case BLADERF_FORMAT_SC16_Q11_META:
+        case BLADERF_FORMAT_SC12_Q11:
+        case BLADERF_FORMAT_SC12_Q11_META:
             buffer_size_bytes = sc16q11_to_bytes(samples_per_buffer);
             break;
 
@@ -199,6 +209,14 @@ int async_run_stream(struct bladerf_stream *stream, bladerf_channel_layout layou
 {
     int status;
     struct bladerf *dev = stream->dev;
+    bladerf_format format = stream->format;
+
+    if (format == BLADERF_FORMAT_SC12_Q11_META || format == BLADERF_FORMAT_SC12_Q11) {
+        if ((layout & BLADERF_DIRECTION_MASK) == BLADERF_TX) {
+            log_error("TX for 12-bit mode is not supported");
+            return BLADERF_ERR_UNSUPPORTED;
+        }
+    }
 
     MUTEX_LOCK(&stream->lock);
     stream->layout = layout;

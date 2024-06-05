@@ -24,6 +24,13 @@
 
 #include "bladeRF.h"
 
+/* Multiplication factor used to allocate DMA buffers (ie 2 * #messages/buf)*/
+// NOTE: Any changes to GPIF buffer sizes must be reflected on the FPGA
+#define RX_DMA_BUF_SIZE_MULTIPLIER      16
+#define RX_DMA_BUF_COUNT                3
+#define TX_DMA_BUF_SIZE_MULTIPLIER      2
+#define TX_DMA_BUF_COUNT                10
+
 extern const struct NuandApplication NuandRFLink;
 
 /* Enable FW sample loopback */

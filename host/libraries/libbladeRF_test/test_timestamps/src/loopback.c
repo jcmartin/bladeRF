@@ -198,7 +198,7 @@ void *loopback_burst_rx_task (void *args)
                 if (status != 0) {
                     fprintf(stderr, "RX failed in burst %-4u: %s\n",
                             burst_num, bladerf_strerror(status));
-                } else if (meta.status & BLADERF_META_STATUS_OVERRUN) {
+                } else if (meta.status & BLADERF_META_STATUS_SW_OVERRUN) {
                     fprintf(stderr, "Error: RX overrun detected.\n");
                     pthread_mutex_lock(&t->lock);
                     t->stop = true;

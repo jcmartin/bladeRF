@@ -24,6 +24,9 @@ target_link_libraries(libbladeRF_example_sync_rxtx ${LIBS})
 add_executable(libbladeRF_example_sync_rx_meta sync_rx_meta.c example_common.c ${SRC})
 target_link_libraries(libbladeRF_example_sync_rx_meta ${LIBS})
 
+add_executable(libbladeRF_example_sync_rx_12bit sync_rx_12bit.c example_common.c ${SRC})
+target_link_libraries(libbladeRF_example_sync_rx_12bit ${LIBS})
+
 add_executable(libbladeRF_example_sync_tx_meta sync_tx_meta.c example_common.c)
 target_link_libraries(libbladeRF_example_sync_tx_meta ${LIBS})
 

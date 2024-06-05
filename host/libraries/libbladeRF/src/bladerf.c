@@ -49,6 +49,7 @@
 #include "helpers/file.h"
 #include "helpers/have_cap.h"
 #include "helpers/interleave.h"
+#include "helpers/align.h"
 
 
 /******************************************************************************/
@@ -632,11 +633,15 @@ int bladerf_set_sample_rate(struct bladerf *dev,
                             bladerf_sample_rate *actual)
 {
     int status;
+    bladerf_feature feature = dev->feature;
+
     MUTEX_LOCK(&dev->lock);
-
     status = dev->board->set_sample_rate(dev, ch, rate, actual);
-
     MUTEX_UNLOCK(&dev->lock);
+
+    if ((feature & BLADERF_FEATURE_OVERSAMPLE)) {
+        status = bladerf_set_oversample_register_config(dev);
+    }
     return status;
 }
 
@@ -683,9 +688,6 @@ int bladerf_set_rational_sample_rate(struct bladerf *dev,
     *******************************************************/
     if ((feature & BLADERF_FEATURE_OVERSAMPLE)) {
         status = bladerf_set_oversample_register_config(dev);
-        if (status != 0) {
-            log_error("Oversample register config failure\n");
-        }
     }
 
     return status;
@@ -1130,6 +1132,17 @@ int bladerf_deinterleave_stream_buffer(bladerf_channel_layout layout,
                                        void *samples)
 {
     return _interleave_deinterleave_buf(layout, format, buffer_size, samples);
+}
+
+int bladerf_align_12_bit_buffer(unsigned int buffer_size, void *samples)
+{
+    return _align_12bit(samples, buffer_size);
+}
+
+int bladerf_align_and_deinterleave_12_bit_buffer(unsigned int buffer_size,
+                                                 void *samples)
+{
+    return _align_and_deinterleave_12bit(samples, buffer_size);
 }
 
 /******************************************************************************/

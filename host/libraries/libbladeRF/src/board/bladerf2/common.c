@@ -48,12 +48,14 @@ static inline int requires_timestamps(bladerf_format format, bool *required)
     switch (format) {
         case BLADERF_FORMAT_SC8_Q7_META:
         case BLADERF_FORMAT_SC16_Q11_META:
+        case BLADERF_FORMAT_SC12_Q11_META:
         case BLADERF_FORMAT_PACKET_META:
             *required = true;
             break;
 
         case BLADERF_FORMAT_SC8_Q7:
         case BLADERF_FORMAT_SC16_Q11:
+        case BLADERF_FORMAT_SC12_Q11:
             *required = false;
             break;
 
@@ -123,7 +125,24 @@ int perform_format_config(struct bladerf *dev,
        gpio_val &= ~BLADERF_GPIO_8BIT_MODE;
     }
 
+    if (format == BLADERF_FORMAT_SC12_Q11 || format == BLADERF_FORMAT_SC12_Q11_META) {
+        gpio_val |= BLADERF_GPIO_12BIT_MODE;
+    } else {
+        gpio_val &= ~BLADERF_GPIO_12BIT_MODE;
+    }
+
     CHECK_STATUS(dev->backend->config_gpio_write(dev, gpio_val));
+
+    // TODO: TEMP
+    uint32_t gpio_val_set;
+    CHECK_STATUS(dev->backend->config_gpio_read(dev, &gpio_val_set));
+    if (gpio_val != gpio_val_set) {
+        log_error(
+            "NIOS GPIO config values not set, expected 0x%x but got 0x%x\n",
+            gpio_val, gpio_val_set);
+    } else {
+        log_debug("NIOS GPIO config values set to 0x%x\n", gpio_val);
+    }
 
     board_data->module_format[dir] = format;
 

@@ -117,7 +117,7 @@ static inline enum check_result check_data(int16_t *samples,
     had_error = (ts_delta != 0 || read_trunc || data_discont);
 
     if (!had_error) {
-        const bool overrun = (meta->status & BLADERF_META_STATUS_OVERRUN) != 0;
+        const bool overrun = (meta->status & BLADERF_META_STATUS_SW_OVERRUN) != 0;
         if (overrun && timestamp != UINT64_MAX) {
             result = FAILURE_DETECTED;
             fprintf(stderr, "Error: Overrun flagged without any symptoms!\n");
@@ -125,7 +125,7 @@ static inline enum check_result check_data(int16_t *samples,
             result = NO_ERRORS;
         }
     } else {
-        if (meta->status & BLADERF_META_STATUS_OVERRUN) {
+        if (meta->status & BLADERF_META_STATUS_SW_OVERRUN) {
             result = DETECTED_OVERRUN;
 
             if (! (*supress_overrun_msg) ) {

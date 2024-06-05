@@ -127,7 +127,7 @@ static int run(struct bladerf *dev, struct app_params *p,
             fprintf(stderr, "RX #%u @ 0x%"PRIx64" failed: %s\n",
                     i, meta.timestamp, bladerf_strerror(status));
             pass = false;
-        } else if (meta.status & BLADERF_META_STATUS_OVERRUN) {
+        } else if (meta.status & BLADERF_META_STATUS_SW_OVERRUN) {
             discont++;
             fprintf(stderr, "RX overrun in read @ t=0x%"PRIu64
                     ". Got %u samples.\n", meta.timestamp, meta.actual_count);

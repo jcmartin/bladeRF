@@ -6,6 +6,23 @@ hosted on GitHub: https://github.com/nuand/bladeRF
 ================================================================================
 
 --------------------------------
+v0.143.1 (2024-06-05)
+--------------------------------
+
+Add a 12-bit mode to overcome GPIF limitations for the bladerf2.
+
+As a consequence of required changes to firmware,
+packet mode is no longer supported.
+
+Features:
+* bladerf2: 12bit mode added
+* bladerf2: hardware overrun checks added
+* hdl: support multiple messages per GPIF buffer and interleaving buffers
+
+Fixes:
+* hdl: Fix off by one dual rx which also fixes libusb timeouts
+
+--------------------------------
 v0.15.1 (2023-04-03)
 --------------------------------
 
