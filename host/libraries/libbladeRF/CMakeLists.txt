@@ -7,7 +7,7 @@ project(libbladeRF C)
 ################################################################################
 
 set(VERSION_INFO_MAJOR  2)
-set(VERSION_INFO_MINOR  5)
+set(VERSION_INFO_MINOR  133)
 set(VERSION_INFO_PATCH  0)
 
 if(NOT DEFINED VERSION_INFO_EXTRA)
