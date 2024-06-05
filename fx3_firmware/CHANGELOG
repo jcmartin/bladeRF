@@ -5,6 +5,16 @@ For more detailed information, please see the git change log and issue tracker
 hosted on GitHub: https://github.com/nuand/bladeRF
 ================================================================================
 
+v2.132.0 (2023-06-05)
+--------------------------------
+For the RX (device -> host):
+
+ * Enable USB bursting
+   * By default the FX3 does not try to combine buffers for a single burst
+ * Increase buffer sizes to effectively burst
+   * Eliminate delays associated with switching (see `benchmark/README.md`)
+ * Move to a multi-channel DMA, interleaving channels to reduce delay
+ * Added benchmark code and results to the `benchmark` directory
 
 v2.4.0 (2020-08-01)
 --------------------------------

@@ -17,6 +17,7 @@ packet mode is no longer supported.
 Features:
 * bladerf2: 12bit mode added
 * bladerf2: hardware overrun checks added
+* hdl: support multiple messages per GPIF buffer and interleaving buffers
 
 Fixes:
 * hdl: Fix off by one dual rx which also fixes libusb timeouts
