@@ -5,6 +5,34 @@ For more detailed information, please see the git change log and issue tracker
 hosted on GitHub: https://github.com/Nuand/bladeRF
 ================================================================================
 
+v2.130.0 (2024-06-05)
+--------------------------------
+
+This version of libbladeRF is intended for use with:
+
+FX3 Firmware v2.132.0
+FPGA         v0.143.1
+
+These version numbers are indicated with a 1 in the MSB, the smallest width
+being a byte, hence an added 2^7 = 128 to all previous version numbers.
+
+New features:
+ * Added `BLADERF_FORMAT_SC12_Q11` and `BLADERF_FORMAT_SC12_Q11_META` for RX
+   * This format is identical to corresponding 16-bit formats but is not sign
+     extended when sent from the FPGA -> host, instead packed as 12 bits.
+   * When using `bladerf_sync_rx()`, the 12 bit samples will be unpacked and 
+     byte aligned into a buffer identical to `BLADERF_FORMAT_SC16_Q11`
+ * Added `BLADERF_META_STATUS_SW_OVERRUN` and `BLADERF_META_STATUS_HW_OVERRUN`
+   to distinguish between discontinuities detected in metadata mode leaving the
+   FPGA (HW) vs discontinuities experienced only by the host (SW).
+   * Messages that are invalid due to a HW overrun are considered invalid and
+     are subsequently skipped
+
+Bug fixes:
+ * sync.c: fix timestamp seeking for two channels
+ * Removed unused but set variables causing compilation errors on macOS
+ * bladerf.c: actually enable oversampling mode for `bladerf_set_sample_rate`
+
 v2.2.0 (2018-12-21)
 --------------------------------
 
