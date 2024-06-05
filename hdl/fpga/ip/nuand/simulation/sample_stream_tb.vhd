@@ -136,7 +136,8 @@ architecture arch of sample_stream_tb is
 
     signal rx_sample_fifo   :   fifo_t(
                                     wdata(((NUM_MIMO_STREAMS*32)-1) downto 0),
-                                    rdata( 31 downto 0), -- GPIF side is always 32 bits
+                                    -- GPIF side is always 32 bits (except with 12 bit packer)
+                                    rdata(RX_FIFO_T_DEFAULT.rdata'range),
                                     rused(RX_FIFO_T_DEFAULT.rused'range),
                                     wused(compute_wrusedw_high(4096,"NO") downto 0)
                                 );
@@ -150,12 +151,19 @@ architecture arch of sample_stream_tb is
 
     signal rx_meta_fifo     :   fifo_t(
                                     wdata(127 downto 0),
-                                    rdata( 31 downto 0),
+                                    rdata(META_FIFO_RX_T_DEFAULT.rdata'range),
                                     rused(META_FIFO_RX_T_DEFAULT.rused'range),
                                     wused(META_FIFO_RX_T_DEFAULT.wused'range)
                                 );
 
     signal tx_loopback_fifo :   loopback_fifo_t;
+
+    signal rx_sample_fifo_rreq    : std_logic;
+    signal rx_sample_fifo_rdata   : std_logic_vector(31 downto 0);
+    signal rx_sample_fifo_rused   : std_logic_vector(rx_sample_fifo.rused'range);
+    signal rx_meta_fifo_rreq      : std_logic;
+    signal rx_meta_fifo_rempty    : std_logic;
+    signal rx_meta_fifo_rdata     : std_logic_vector(31 downto 0);
 
     -- Loopback controls
     signal tx_loopback_enabled  : std_logic := '0';
