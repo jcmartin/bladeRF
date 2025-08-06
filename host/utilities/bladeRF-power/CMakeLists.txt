@@ -3,6 +3,7 @@ project(bladeRF-power LANGUAGES C)
 
 set (CURSES_NEED_NCURSES TRUE)
 set (CURSES_NEED_WIDE TRUE)
+set (CMAKE_PREFIX_PATH /opt/homebrew/opt/ncurses)
 find_package(Curses REQUIRED)
 
 include_directories(

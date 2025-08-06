@@ -209,9 +209,9 @@ endif()
 # Process subdirectories
 ################################################################################
 add_subdirectory(libraries)
-add_subdirectory(misc)
-add_subdirectory(utilities)
-add_subdirectory(common)
+#add_subdirectory(misc)
+#add_subdirectory(utilities)
+#add_subdirectory(common)
 
 ################################################################################
 # Create uninstall target
