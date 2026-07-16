@@ -370,7 +370,7 @@ void *rx_task(void *cli_state_arg)
 
                     status = bladerf_sync_config(
                         cli_state->dev, rx->data_mgmt.layout,
-                        cli_state->sample_format, rx->data_mgmt.num_buffers,
+                        BLADERF_FORMAT_SC16_Q11_PACKED_META, rx->data_mgmt.num_buffers,
                         rx->data_mgmt.samples_per_buffer,
                         rx->data_mgmt.num_transfers, rx->data_mgmt.timeout_ms);
 
