@@ -241,7 +241,7 @@ int sync_init(struct bladerf_sync *sync,
     sync->meta.state = SYNC_META_STATE_HEADER;
     sync->meta.msg_size = msg_size;
     sync->meta.msg_per_buf = msg_per_buf(msg_size, buffer_size, bytes_per_sample);
-    sync->meta.samples_per_msg = samples_per_msg(msg_size, bytes_per_sample);
+    sync->meta.samples_per_msg = samples_per_msg(msg_size, bytes_per_sample) - 1;  // OFFSET BY ONE FOR PACKED. FIXME
     sync->meta.samples_per_ts = (layout == BLADERF_RX_X2 || layout == BLADERF_TX_X2) ? 2:1;
 
     log_verbose("%s: Buffer size (in bytes): %u\n",
@@ -454,7 +454,7 @@ static inline unsigned int ts_remaining(struct bladerf_sync *s)
 /* Returns # of samples left in a message (SC16Q11 mode only) */
 static inline unsigned int left_in_msg(struct bladerf_sync *s)
 {
-    size_t ret = s->meta.samples_per_msg - s->meta.curr_msg_off - 1;  // OFFSET BY ONE FOR PACKED. FIXME
+    size_t ret = s->meta.samples_per_msg - s->meta.curr_msg_off;
     assert(ret <= UINT_MAX);
 
     return (unsigned int) ret;
