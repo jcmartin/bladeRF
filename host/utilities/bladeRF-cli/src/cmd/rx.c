@@ -271,8 +271,9 @@ static int rx_task_exec_running(struct cli_state *s)
             break;
         }
 
+        struct bladerf_metadata metadata;
         /* Read the samples into the sample buffer */
-        status = bladerf_sync_rx(s->dev, samples, samples_per_buffer, NULL,
+        status = bladerf_sync_rx(s->dev, samples, samples_per_buffer, &metadata,
                                  timeout_ms);
 
         if (status != 0) {
