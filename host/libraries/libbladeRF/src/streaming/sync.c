@@ -767,6 +767,10 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                             samples_to_copy =
                                 uint_min(num_samples - samples_returned,
                                          left_in_msg(s));
+                            fprintf(stdout, "samples_per_msg: %d curr_msg_off: %zu",s->meta.samples_per_msg, s->meta.curr_msg_off);
+                            fprintf(stdout, "num_samples: %d samples_returned: %d left_in_msg(s): %d samples_to_copy: %d\n"
+                                        , num_samples, samples_returned, left_in_msg(s), samples_to_copy);
+                            fprintf(stdout, "samples2bytes(s, s->meta.curr_msg_off): %zu\n", samples2bytes(s, s->meta.curr_msg_off));
 
                             if (s->stream_config.format == BLADERF_FORMAT_SC16_Q11_PACKED_META) {
                                 // Unpack SC12Q11 samples to SC16Q11 directly into destination buffer
