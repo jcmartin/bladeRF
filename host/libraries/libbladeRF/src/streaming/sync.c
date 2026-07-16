@@ -478,6 +478,7 @@ static inline unsigned int timestamp_to_msg(struct bladerf_sync *s, uint64_t t)
 int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
             struct bladerf_metadata *user_meta, unsigned int timeout_ms)
 {
+    fprintf(stdout, "\nsync_rx %u %d\n\n", num_samples, s->stream_config.format);
     struct buffer_mgmt *b;
 
     int status = 0;
