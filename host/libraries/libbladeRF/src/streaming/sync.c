@@ -740,7 +740,7 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                                         s->meta.msg_timestamp,
                                         s->meta.curr_timestamp);
                         }
-                        fprintf(stderr, "%8d %llu\n", s->meta.msg_num, s->meta.msg_timestamp);
+                        fprintf(stdout, "\n^^^^^^\n%8d %llu\n^^^^^^^^\n", s->meta.msg_num, s->meta.msg_timestamp);
 
                         s->meta.curr_timestamp = s->meta.msg_timestamp;
                         s->meta.state = SYNC_META_STATE_SAMPLES;
