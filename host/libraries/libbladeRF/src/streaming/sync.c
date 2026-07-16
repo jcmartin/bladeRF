@@ -189,7 +189,7 @@ int sync_init(struct bladerf_sync *sync,
         fx3_version.major, fx3_version.minor, fx3_version.patch,
         gpif_buffer_size, gpif_buffer_size == USB_MSG_SIZE_SS_LEGACY ? " (legacy)" : "");
 
-    if (format == BLADERF_FORMAT_SC16_Q11_PACKED) {
+    if (format == BLADERF_FORMAT_SC16_Q11_PACKED || format == BLADERF_FORMAT_SC16_Q11_PACKED_META) {
         valid_buffer_size = 3*gpif_buffer_size;
     }
 

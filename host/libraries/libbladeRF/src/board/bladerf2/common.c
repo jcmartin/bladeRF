@@ -125,7 +125,7 @@ int perform_format_config(struct bladerf *dev,
        gpio_val &= ~BLADERF_GPIO_8BIT_MODE;
     }
 
-    if (format == BLADERF_FORMAT_SC16_Q11_PACKED) {
+    if (format == BLADERF_FORMAT_SC16_Q11_PACKED || format == BLADERF_FORMAT_SC16_Q11_PACKED_META) {
        gpio_val |= BLADERF_GPIO_HIGHLY_PACKED_MODE;
     } else {
        gpio_val &= ~BLADERF_GPIO_HIGHLY_PACKED_MODE;

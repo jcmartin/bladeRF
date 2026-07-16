@@ -1802,6 +1802,8 @@ const char * bladerf_format_to_string(bladerf_format format)
             return "BLADERF_FORMAT_SC8_Q7_META";
         case BLADERF_FORMAT_SC16_Q11_PACKED:
             return "BLADERF_FORMAT_SC16_Q11_PACKED";
+        case BLADERF_FORMAT_SC16_Q11_PACKED_META:
+            return "BLADERF_FORMAT_SC16_Q11_PACKED_META";
         case BLADERF_FORMAT_SC16_Q11:
             return "BLADERF_FORMAT_SC16_Q11";
         case BLADERF_FORMAT_SC16_Q11_META:
