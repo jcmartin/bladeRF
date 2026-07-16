@@ -272,6 +272,7 @@ static int rx_task_exec_running(struct cli_state *s)
         }
 
         struct bladerf_metadata metadata;
+        metadata.flags = BLADERF_META_FLAG_RX_NOW;
         /* Read the samples into the sample buffer */
         status = bladerf_sync_rx(s->dev, samples, samples_per_buffer, &metadata,
                                  timeout_ms);
