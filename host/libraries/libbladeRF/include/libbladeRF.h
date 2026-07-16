@@ -2156,6 +2156,8 @@ typedef enum {
      */
     BLADERF_FORMAT_SC16_Q11_PACKED,
 
+    BLADERF_FORMAT_SC16_Q11_PACKED_META,
+
     /**
      * This format is the same as the ::BLADERF_FORMAT_SC16_Q11 format, except
      * the first 4 samples in every <i>block*</i> of samples are replaced with

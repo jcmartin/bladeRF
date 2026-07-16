@@ -48,6 +48,7 @@ static inline int requires_timestamps(bladerf_format format, bool *required)
     switch (format) {
         case BLADERF_FORMAT_SC8_Q7_META:
         case BLADERF_FORMAT_SC16_Q11_META:
+        case BLADERF_FORMAT_SC16_Q11_PACKED_META:
         case BLADERF_FORMAT_PACKET_META:
             *required = true;
             break;

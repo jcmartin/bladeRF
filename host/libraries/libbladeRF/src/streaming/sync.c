@@ -508,7 +508,9 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
 
     if (s->stream_config.format == BLADERF_FORMAT_SC16_Q11_META ||
           s->stream_config.format == BLADERF_FORMAT_SC8_Q7_META ||
-          s->stream_config.format == BLADERF_FORMAT_PACKET_META) {
+          s->stream_config.format == BLADERF_FORMAT_PACKET_META ||
+          s->stream_config.format == BLADERF_FORMAT_SC16_Q11_PACKED_META
+          ) {
         if (user_meta == NULL) {
             log_debug("NULL metadata pointer passed to %s\n", __FUNCTION__);
             status = BLADERF_ERR_INVAL;
@@ -624,6 +626,7 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                         break;
 
                     case BLADERF_FORMAT_SC16_Q11_META:
+                    case BLADERF_FORMAT_SC16_Q11_PACKED_META:
                     case BLADERF_FORMAT_SC8_Q7_META:
                         s->state = SYNC_STATE_USING_BUFFER_META;
                         s->meta.curr_msg_off = 0;
@@ -1157,6 +1160,7 @@ int sync_tx(struct bladerf_sync *s,
                         break;
 
                     case BLADERF_FORMAT_SC16_Q11_META:
+                    case BLADERF_FORMAT_SC16_Q11_PACKED_META:
                     case BLADERF_FORMAT_SC8_Q7_META:
                         s->state             = SYNC_STATE_USING_BUFFER_META;
                         s->meta.curr_msg_off = 0;
