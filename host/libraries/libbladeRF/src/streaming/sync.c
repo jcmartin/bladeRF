@@ -768,11 +768,26 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                                 uint_min(num_samples - samples_returned,
                                          left_in_msg(s));
 
-                            memcpy(samples_dest + samples2bytes(s, samples_returned),
-                                   s->meta.curr_msg +
-                                        METADATA_HEADER_SIZE +
-                                        samples2bytes(s, s->meta.curr_msg_off),
-                                   samples2bytes(s, samples_to_copy));
+                            if (s->stream_config.format == BLADERF_FORMAT_SC16_Q11_PACKED_META) {
+                                // Unpack SC12Q11 samples to SC16Q11 directly into destination buffer
+                                size_t zz, jj;
+                                uint8_t *meta_sample_ptr = s->meta.curr_msg + METADATA_HEADER_SIZE + samples2bytes(s, s->meta.curr_msg_off);
+                                int16_t *dest_ptr = (int16_t*)(samples_dest + (4*samples_returned));
+                                for (zz = 0, jj = 0; zz < 2*samples_to_copy; zz+=4, jj+=3) {
+                                    dest_ptr[zz+0] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0x0FFF) << 4) >> 4;
+                                    dest_ptr[zz+1] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+1] & 0x00FF) << 8) >> 4
+                                        | ((((uint16_t*)(meta_sample_ptr))[jj+0] & 0xF000) >> 12);
+                                    dest_ptr[zz+2] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0x000F) << 12) >> 4
+                                        | ((((uint16_t*)(meta_sample_ptr))[jj+1] & 0xFF00)) >> 8;
+                                    dest_ptr[zz+3] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0xFFF0)) >> 4;
+                                }
+                            } else {
+                                memcpy(samples_dest + samples2bytes(s, samples_returned),
+                                       s->meta.curr_msg +
+                                            METADATA_HEADER_SIZE +
+                                            samples2bytes(s, s->meta.curr_msg_off),
+                                       samples2bytes(s, samples_to_copy));
+                            }
 
                             samples_returned += samples_to_copy;
                             s->meta.curr_msg_off += samples_to_copy;
