@@ -454,7 +454,7 @@ static inline unsigned int ts_remaining(struct bladerf_sync *s)
 /* Returns # of samples left in a message (SC16Q11 mode only) */
 static inline unsigned int left_in_msg(struct bladerf_sync *s)
 {
-    size_t ret = s->meta.samples_per_msg - s->meta.curr_msg_off;
+    size_t ret = s->meta.samples_per_msg - s->meta.curr_msg_off - 1;  // OFFSET BY ONE FOR PACKED. FIXME
     assert(ret <= UINT_MAX);
 
     return (unsigned int) ret;
