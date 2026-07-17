@@ -663,49 +663,14 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                     size_t zz = 0, jj = 0;
                     uint8_t *meta_sample_ptr = buf_src + samples2bytes(s, b->partial_off);
                     int16_t *dest_ptr = (int16_t*)(samples_dest + (4*samples_returned));
-                    if (packed_align == 0) {
-                        for (zz = 0, jj = 0; zz < 2*samples_to_copy; zz+=4, jj+=3) {
-                            dest_ptr[zz+0] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0x0FFF) << 4) >> 4;
-                            dest_ptr[zz+1] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+1] & 0x00FF) << 8) >> 4
-                                | ((((uint16_t*)(meta_sample_ptr))[jj+0] & 0xF000) >> 12);
-                            dest_ptr[zz+2] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0x000F) << 12) >> 4
-                                | ((((uint16_t*)(meta_sample_ptr))[jj+1] & 0xFF00)) >> 8;
-                            dest_ptr[zz+3] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0xFFF0)) >> 4;
-                        }
-                        carry_over_bits_jj0 = meta_sample_ptr[jj];
-                        carry_over_bits_jj1 = meta_sample_ptr[jj+1];
-                        //carry_over_bits_jj2 = meta_sample_ptr[jj+2]; GARBAGE
-                    } else if (packed_align == 1) {
-                        zz = 0;
-                        dest_ptr[zz+0] = (int16_t)((carry_over_bits_jj0 & 0x0FFF) << 4) >> 4;
-                        dest_ptr[zz+1] = (int16_t)((carry_over_bits_jj1 & 0x00FF) << 8) >> 4
-                            | ((carry_over_bits_jj0 & 0xF000) >> 12);
-                        dest_ptr[zz+2] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0x000F) << 12) >> 4
-                            | ((carry_over_bits_jj1 & 0xFF00)) >> 8;
-                        dest_ptr[zz+3] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0xFFF0)) >> 4;
-
-                        for (zz = 4, jj = 1; zz < 2*samples_to_copy; zz+=4, jj+=3) {
-                            dest_ptr[zz+0] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0x0FFF) << 4) >> 4;
-                            dest_ptr[zz+1] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+1] & 0x00FF) << 8) >> 4
-                                | ((((uint16_t*)(meta_sample_ptr))[jj+0] & 0xF000) >> 12);
-                            dest_ptr[zz+2] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0x000F) << 12) >> 4
-                                | ((((uint16_t*)(meta_sample_ptr))[jj+1] & 0xFF00)) >> 8;
-                            dest_ptr[zz+3] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0xFFF0)) >> 4;
-                        }
-                        carry_over_bits_jj0 = meta_sample_ptr[jj];
-                        carry_over_bits_jj1 = meta_sample_ptr[jj+1];
-                    } else {
-                        for (zz = 0, jj = 0; zz < 2*samples_to_copy; zz+=4, jj+=3) {
-                            dest_ptr[zz+0] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0x0FFF) << 4) >> 4;
-                            dest_ptr[zz+1] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+1] & 0x00FF) << 8) >> 4
-                                | ((((uint16_t*)(meta_sample_ptr))[jj+0] & 0xF000) >> 12);
-                            dest_ptr[zz+2] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0x000F) << 12) >> 4
-                                | ((((uint16_t*)(meta_sample_ptr))[jj+1] & 0xFF00)) >> 8;
-                            dest_ptr[zz+3] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0xFFF0)) >> 4;
-                        }
+                    for (zz = 0, jj = 0; zz < 2*samples_to_copy; zz+=4, jj+=3) {
+                        dest_ptr[zz+0] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0x0FFF) << 4) >> 4;
+                        dest_ptr[zz+1] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+1] & 0x00FF) << 8) >> 4
+                            | ((((uint16_t*)(meta_sample_ptr))[jj+0] & 0xF000) >> 12);
+                        dest_ptr[zz+2] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0x000F) << 12) >> 4
+                            | ((((uint16_t*)(meta_sample_ptr))[jj+1] & 0xFF00)) >> 8;
+                        dest_ptr[zz+3] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0xFFF0)) >> 4;
                     }
-
-                    packed_align = (packed_align + 1) % 3;
                 } else {
                     memcpy(samples_dest + samples2bytes(s, samples_returned),
                         buf_src + samples2bytes(s, b->partial_off),
@@ -816,14 +781,49 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                                 size_t zz, jj;
                                 uint8_t *meta_sample_ptr = s->meta.curr_msg + METADATA_HEADER_SIZE + samples2bytes(s, s->meta.curr_msg_off);
                                 int16_t *dest_ptr = (int16_t*)(samples_dest + (4*samples_returned));
-                                for (zz = 0, jj = 0; zz < 2*samples_to_copy; zz+=4, jj+=3) {
-                                    dest_ptr[zz+0] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0x0FFF) << 4) >> 4;
-                                    dest_ptr[zz+1] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+1] & 0x00FF) << 8) >> 4
-                                        | ((((uint16_t*)(meta_sample_ptr))[jj+0] & 0xF000) >> 12);
-                                    dest_ptr[zz+2] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0x000F) << 12) >> 4
-                                        | ((((uint16_t*)(meta_sample_ptr))[jj+1] & 0xFF00)) >> 8;
-                                    dest_ptr[zz+3] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0xFFF0)) >> 4;
+                                if (packed_align == 0) {
+                                    for (zz = 0, jj = 0; zz < 2*samples_to_copy; zz+=4, jj+=3) {
+                                        dest_ptr[zz+0] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0x0FFF) << 4) >> 4;
+                                        dest_ptr[zz+1] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+1] & 0x00FF) << 8) >> 4
+                                            | ((((uint16_t*)(meta_sample_ptr))[jj+0] & 0xF000) >> 12);
+                                        dest_ptr[zz+2] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0x000F) << 12) >> 4
+                                            | ((((uint16_t*)(meta_sample_ptr))[jj+1] & 0xFF00)) >> 8;
+                                        dest_ptr[zz+3] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0xFFF0)) >> 4;
+                                    }
+                                    carry_over_bits_jj0 = meta_sample_ptr[jj];
+                                    carry_over_bits_jj1 = meta_sample_ptr[jj+1];
+                                    //carry_over_bits_jj2 = meta_sample_ptr[jj+2]; GARBAGE
+                                } else if (packed_align == 1) {
+                                    zz = 0;
+                                    dest_ptr[zz+0] = (int16_t)((carry_over_bits_jj0 & 0x0FFF) << 4) >> 4;
+                                    dest_ptr[zz+1] = (int16_t)((carry_over_bits_jj1 & 0x00FF) << 8) >> 4
+                                        | ((carry_over_bits_jj0 & 0xF000) >> 12);
+                                    dest_ptr[zz+2] = (int16_t)((((uint16_t*)(meta_sample_ptr))[0] & 0x000F) << 12) >> 4
+                                        | ((carry_over_bits_jj1 & 0xFF00)) >> 8;
+                                    dest_ptr[zz+3] = (int16_t)((((uint16_t*)(meta_sample_ptr))[0] & 0xFFF0)) >> 4;
+
+                                    for (zz = 4, jj = 1; zz < 2*samples_to_copy; zz+=4, jj+=3) {
+                                        dest_ptr[zz+0] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0x0FFF) << 4) >> 4;
+                                        dest_ptr[zz+1] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+1] & 0x00FF) << 8) >> 4
+                                            | ((((uint16_t*)(meta_sample_ptr))[jj+0] & 0xF000) >> 12);
+                                        dest_ptr[zz+2] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0x000F) << 12) >> 4
+                                            | ((((uint16_t*)(meta_sample_ptr))[jj+1] & 0xFF00)) >> 8;
+                                        dest_ptr[zz+3] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0xFFF0)) >> 4;
+                                    }
+                                    carry_over_bits_jj0 = meta_sample_ptr[jj];
+                                    carry_over_bits_jj1 = meta_sample_ptr[jj+1];
+                                } else {
+                                    for (zz = 0, jj = 0; zz < 2*samples_to_copy; zz+=4, jj+=3) {
+                                        dest_ptr[zz+0] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0x0FFF) << 4) >> 4;
+                                        dest_ptr[zz+1] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+1] & 0x00FF) << 8) >> 4
+                                            | ((((uint16_t*)(meta_sample_ptr))[jj+0] & 0xF000) >> 12);
+                                        dest_ptr[zz+2] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0x000F) << 12) >> 4
+                                            | ((((uint16_t*)(meta_sample_ptr))[jj+1] & 0xFF00)) >> 8;
+                                        dest_ptr[zz+3] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+2] & 0xFFF0)) >> 4;
+                                    }
                                 }
+
+                                packed_align = (packed_align + 1) % 3;
                             } else {
                                 memcpy(samples_dest + samples2bytes(s, samples_returned),
                                        s->meta.curr_msg +
