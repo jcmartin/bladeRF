@@ -293,6 +293,7 @@ begin
             packet_enable       =>  packet_en_pclk,
             rx_enable           =>  rx_enable_pclk,
             tx_enable           =>  tx_enable_pclk,
+            packed_meta_enable  =>  highly_packed_en_txrx and meta_en_pclk,
 
             gpif_in             =>  fx3_gpif_in,
             gpif_out            =>  fx3_gpif_out,

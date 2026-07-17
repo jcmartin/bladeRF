@@ -47,6 +47,7 @@ entity fx3_gpif is
     rx_enable           :   out std_logic;
     meta_enable         :   in  std_logic;
     packet_enable       :   in  std_logic;
+    packed_meta_enable  :   in  std_logic;
 
     -- TX FIFO
     tx_fifo_write       :   out std_logic;
@@ -495,7 +496,7 @@ begin
             when SAMPLE_READ =>
                 -- Service the sample FIFO.
                 future.gpif_mode        <= RX;
-                future.rx_fifo_rd       <= '1';
+                future.rx_fifo_rd       <= (current.dma_downcount /= 0) || packed_meta_enable = 0;
                 future.finishing_rx       <= '1';
 
                 -- Clear the underrun indicator.  This is set in the event
