@@ -795,7 +795,9 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                                     carry_over_bits_jj1 = meta_sample_ptr[jj+1];
                                     carry_over_bits_jj2 = meta_sample_ptr[jj+2];
                                     carry_over_bits_jj3 = meta_sample_ptr[jj+3];
+                                    fprintf(stdout,">>>>>>>>>>>>> %x %x %x %x\n",carry_over_bits_jj0,carry_over_bits_jj1,carry_over_bits_jj2,carry_over_bits_jj3);
                                 } else if (packed_align == 1) {
+                                    fprintf(stdout,"+++++++++++++ %x %x %x %x\n",carry_over_bits_jj0,carry_over_bits_jj1,carry_over_bits_jj2,carry_over_bits_jj3);
                                     zz = 0;
                                     dest_ptr[zz+0] = (int16_t)((carry_over_bits_jj0 & 0x0FFF) << 4) >> 4;
                                     dest_ptr[zz+1] = (int16_t)((carry_over_bits_jj1 & 0x00FF) << 8) >> 4
@@ -824,7 +826,10 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                                     }
                                     carry_over_bits_jj0 = meta_sample_ptr[jj];
                                     carry_over_bits_jj1 = meta_sample_ptr[jj+1];
+                                    carry_over_bits_jj2 = meta_sample_ptr[jj+2];
+                                    carry_over_bits_jj3 = meta_sample_ptr[jj+3];
                                 } else {
+                                    fprintf(stdout,"------------- %x %x %x %x\n",carry_over_bits_jj0,carry_over_bits_jj1,carry_over_bits_jj2,carry_over_bits_jj3);
                                     for (zz = 0, jj = 0; zz < 2*samples_to_copy; zz+=4, jj+=3) {
                                         dest_ptr[zz+0] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+0] & 0x0FFF) << 4) >> 4;
                                         dest_ptr[zz+1] = (int16_t)((((uint16_t*)(meta_sample_ptr))[jj+1] & 0x00FF) << 8) >> 4
