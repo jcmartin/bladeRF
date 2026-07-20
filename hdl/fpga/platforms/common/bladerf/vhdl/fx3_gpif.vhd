@@ -496,7 +496,10 @@ begin
             when SAMPLE_READ =>
                 -- Service the sample FIFO.
                 future.gpif_mode        <= RX;
-                future.rx_fifo_rd       <= (current.dma_downcount /= 0) || packed_meta_enable = 0;
+		if (current.dma_downcount /= 0) OR (packed_meta_enable /= '0') then
+			future.rx_fifo_rd <= '0';
+                end if;
+
                 future.finishing_rx       <= '1';
 
                 -- Clear the underrun indicator.  This is set in the event
@@ -504,7 +507,7 @@ begin
                 -- as part of RX metadata.
                 future.underrun_clr     <= '1';
 
-                if (packet_enable = '1' and current.dma_downcount = 0 and current.meta_dword(0) = '1') then
+                if (packet_enable = '1') and (current.dma_downcount = 0) and (current.meta_dword(0) = '1') then
                     future.gpif_mode        <= IDLE;
                 end if;
 

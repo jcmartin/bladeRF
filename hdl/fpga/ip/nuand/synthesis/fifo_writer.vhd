@@ -163,9 +163,11 @@ begin
             dma_buf_size <= DMA_BUF_SIZE_SS;
         elsif( rising_edge(clock) ) then
             if( usb_speed = '0' ) then
-                dma_buf_size <= DMA_BUF_SIZE_SS;
-            elsif ( highly_packed_mode_en = '1' and meta_en = '1') then
-                dma_buf_size <= DMA_BUF_SIZE_HS - 1;
+                if ( highly_packed_mode_en = '1' and meta_en = '1') then
+                    dma_buf_size <= DMA_BUF_SIZE_SS - 1;
+                else
+                    dma_buf_size <= DMA_BUF_SIZE_SS;
+                end if;
             else
                 dma_buf_size <= DMA_BUF_SIZE_HS;
             end if;
