@@ -496,7 +496,7 @@ begin
             when SAMPLE_READ =>
                 -- Service the sample FIFO.
                 future.gpif_mode        <= RX;
-                if (current.dma_downcount /= 0) OR (packed_meta_enable /= '0') then
+                if (current.dma_downcount /= 0) OR (packed_meta_enable = '0') then
                     future.rx_fifo_rd <= '1';
                 else
                     future.rx_fifo_rd <= '0';
