@@ -778,6 +778,7 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                                 uint8_t *meta_sample_ptr_8 = s->meta.curr_msg + METADATA_HEADER_SIZE + samples2bytes(s, s->meta.curr_msg_off);
                                 uint16_t *meta_sample_ptr = (uint16_t*)meta_sample_ptr_8;
                                 int16_t *dest_ptr = (int16_t*)(samples_dest + (4*samples_returned));
+                                fprintf(stdout, "Head: %x %x %x %x\n", meta_sample_ptr[0], meta_sample_ptr[1],meta_sample_ptr[2],meta_sample_ptr[3]);
                                 for (zz = 0, jj = 0; zz < 2*samples_to_copy; zz+=4, jj+=3) {
                                     dest_ptr[zz+0] = (int16_t)((meta_sample_ptr[jj+0] & 0x0FFF) << 4) >> 4;
                                     dest_ptr[zz+1] = (int16_t)((meta_sample_ptr[jj+1] & 0x00FF) << 8) >> 4
@@ -786,6 +787,7 @@ int sync_rx(struct bladerf_sync *s, void *samples, unsigned num_samples,
                                         | ((meta_sample_ptr[jj+1] & 0xFF00)) >> 8;
                                     dest_ptr[zz+3] = (int16_t)((meta_sample_ptr[jj+2] & 0xFFF0)) >> 4;
                                 }
+                                fprintf(stdout, "Tail: %x %x %x %x\n\n", meta_sample_ptr[jj], meta_sample_ptr[jj+1],meta_sample_ptr[jj+2],meta_sample_ptr[jj+3]);
                             } else {
                                 memcpy(samples_dest + samples2bytes(s, samples_returned),
                                        s->meta.curr_msg +
